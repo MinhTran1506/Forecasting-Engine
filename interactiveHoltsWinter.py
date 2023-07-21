@@ -71,7 +71,7 @@ def holts_winter_forecast(alpha, beta, gamma, periods):
 
     # Show the plot using st.pyplot()
     st.subheader("Holt-Winter Forecast Diagram")
-    st.pyplot()
+    st.pyplot(plt.gcf())
     
     #print(optimized_model.summary())
 
@@ -173,7 +173,7 @@ prophet_model.plot(prophet_forecast, xlabel='Date', ylabel='Forecast')
 plt.title('Prophet Forecast')
 
 # Show the Prophet plot using st.pyplot()
-st.pyplot()
+st.pyplot(plt.gcf())
 
 st.write("MAPE: ", mape_prophet, "%")
 fig = px.line(prophet_forecast, x="ds", y="yhat",
