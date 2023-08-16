@@ -38,10 +38,29 @@ tab_titles = [
 ]
 tabs = st.tabs(tab_titles)
 
+#if uploaded_file is not None:
+#    df = pd.read_csv(uploaded_file)
+#else:
+#    df = pd.read_csv("Holts-Winter-data-input-VNHOLSC064.csv")
+
 if uploaded_file is not None:
-    df = pd.read_csv(uploaded_file)
+    try:
+        df = pd.read_csv(uploaded_file)
+        if df.empty:
+            st.error("Uploaded CSV file is empty.")
+    except pd.errors.EmptyDataError:
+        st.error("Uploaded CSV file is empty.")
 else:
     df = pd.read_csv("Holts-Winter-data-input-VNHOLSC064.csv")
+    
+def download_excel_file(df):
+    output = io.BytesIO()
+    writer = pd.ExcelWriter(output, engine='xlsxwriter')
+    df.to_excel(writer, sheet_name='Sheet1', index=False)
+    writer.save()
+    excel_file = output.getvalue()
+    output.seek(0)
+    return excel_file
 
 ########################### Tab 1 ###########################
 with tabs[0]:
@@ -143,7 +162,8 @@ with tabs[0]:
     st.subheader('User Input Features')
 
     if uploaded_file is not None:
-        input_df = pd.read_csv(uploaded_file)
+        #input_df = pd.read_csv(uploaded_file)
+        st.write('Input parameters')
         st.write(input_df)
     else:
         st.write('Awaiting CSV file to be uploaded. Currently using example input parameters (shown below).')
@@ -151,6 +171,15 @@ with tabs[0]:
 
     # Call the forecasting function
     holts_winter_forecast(alpha_slider, beta_slider, gamma_slider, periods_slider)
+    #if st.button('View data in Excel (Holt-Winter)'):
+    #    st.subheader("Forecast Data")
+    #    st.write(pd.concat([holts_winter_forecast[['ds', 'yhat']], df], axis=1))
+        # Call the function to generate the Excel file
+    #    excel_file = download_excel_file(holts_winter_forecast[['ds', 'yhat']])
+    #    st.download_button(label='Download Excel (Holt-Winter)', data=excel_file, file_name='holts_winter_forecast.xlsx', mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+  
+    
+
 
 
 ########################### Tab 2 ###########################
@@ -193,20 +222,26 @@ with tabs[1]:
                     hover_data=['ds', 'yhat'])
     # Show the plot
     st.plotly_chart(fig)
+    if st.button('View data in Excel (Prophet)'):
+        st.subheader("Forecast Data")
+        st.write(pd.concat([prophet_forecast[['ds', 'yhat']], df], axis=1))
+        # Call the function to generate the Excel file
+        excel_file = download_excel_file(prophet_forecast[['ds', 'yhat']])
+        st.download_button(label='Download Excel (Prophet)', data=excel_file, file_name='prophet_forecast.xlsx', mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
 
 
-def download_excel_file(df):
-    output = io.BytesIO()
-    writer = pd.ExcelWriter(output, engine='xlsxwriter')
-    df.to_excel(writer, sheet_name='Sheet1', index=False)
-    writer.save()
-    excel_file = output.getvalue()
-    output.seek(0)
-    return excel_file
+#def download_excel_file(df):
+#    output = io.BytesIO()
+#    writer = pd.ExcelWriter(output, engine='xlsxwriter')
+#    df.to_excel(writer, sheet_name='Sheet1', index=False)
+#    writer.save()
+#    excel_file = output.getvalue()
+#    output.seek(0)
+#    return excel_file
 
-if st.button('View data in Excel'):
-    st.subheader("Forecast Data")
-    st.write(pd.concat([prophet_forecast[['ds', 'yhat']], df], axis=1))
-    # Call the function to generate the Excel file
-    excel_file = download_excel_file(prophet_forecast[['ds', 'yhat']])
-    st.download_button(label='Download Excel', data=excel_file, file_name='prophet_forecast.xlsx', mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+#if st.button('View data in Excel'):
+#    st.subheader("Forecast Data")
+#    st.write(pd.concat([prophet_forecast[['ds', 'yhat']], df], axis=1))
+#    # Call the function to generate the Excel file
+#    excel_file = download_excel_file(prophet_forecast[['ds', 'yhat']])
+#    st.download_button(label='Download Excel', data=excel_file, file_name='prophet_forecast.xlsx', mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
