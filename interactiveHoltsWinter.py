@@ -17,7 +17,6 @@ import matplotlib.pyplot as plt
 import plotly.express as px
 import xlwings as xw
 
-#alo
 
 st.write("""
 # Forecasting Engine Application
@@ -32,7 +31,7 @@ st.sidebar.markdown("""
 uploaded_file = st.sidebar.file_uploader("Upload you input CSV file", type=["csv"])
 
 tab_titles = [
-    "Holt-Winter",
+    "Holt-Winters",
     "Prophet",
     "ARIMA"
 ]
@@ -110,6 +109,27 @@ with tabs[0]:
         
         #print(optimized_model.summary())
 
+    #this function is the same like the previous one but without visualization
+    def holts_winter_forecast_result(alpha, beta, gamma, periods):
+        # Fit the Winter-Holt's model
+        model = ExponentialSmoothing(data, trend='add', seasonal='add', seasonal_periods=12, 
+                                 initialization_method="estimated")
+
+        fitted_model = model.fit(smoothing_level=alpha, smoothing_slope=beta, smoothing_seasonal=gamma)
+        optimized_model = model.fit(optimized = True)
+
+        # Generate forecast
+        forecast = fitted_model.forecast(periods)
+    
+        # Split data into train and test sets
+        train = data.values[:-12]
+        test = data.values[-12:]
+        
+        # Calculate errors
+        mape = round(np.mean(np.abs((test - forecast[:len(test)]) / test)) * 100, 2)
+        mad = round(mean_absolute_error(test, forecast[:len(test)]), 2)
+        mse = round(mean_squared_error(test, forecast[:len(test)]), 2)
+        return forecast
 
 
 
@@ -172,8 +192,21 @@ with tabs[0]:
         # Call the function to generate the Excel file
     #    excel_file = download_excel_file(holts_winter_forecast[['ds', 'yhat']])
     #    st.download_button(label='Download Excel (Holt-Winter)', data=excel_file, file_name='holts_winter_forecast.xlsx', mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
-  
-    
+    value_alpha = alpha_slider.value
+    value_beta = beta_slider.value
+    value_gamma = gamma_slider.value
+    value_period = periods_slider.value
+
+    FC = holts_winter_forecast_result(value_alpha, value_beta, value_gamma, value_period)
+    FC = pd.DataFrame(FC)
+    FC = FC.rename(columns={0: 'Forecast'})
+
+    if st.button('View data in Excel (Holt-Winters)'):
+        st.subheader("Forecast Data")
+        st.write(pd.concat([FC, df], axis=1))
+        # Call the function to generate the Excel file
+        excel_file = download_excel_file(FC)
+        st.download_button(label='Download Excel (Holt-Winters)', data=excel_file, file_name='holt_winters_forecast.xlsx', mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
 
 
 
