@@ -192,10 +192,10 @@ with tabs[0]:
         # Call the function to generate the Excel file
     #    excel_file = download_excel_file(holts_winter_forecast[['ds', 'yhat']])
     #    st.download_button(label='Download Excel (Holt-Winter)', data=excel_file, file_name='holts_winter_forecast.xlsx', mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
-    value_alpha = alpha_slider.value
-    value_beta = beta_slider.value
-    value_gamma = gamma_slider.value
-    value_period = periods_slider.value
+    value_alpha = alpha_slider
+    value_beta = beta_slider
+    value_gamma = gamma_slider
+    value_period = periods_slider
 
     FC = holts_winter_forecast_result(value_alpha, value_beta, value_gamma, value_period)
     FC = pd.DataFrame(FC)
