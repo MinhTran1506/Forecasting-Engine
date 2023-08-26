@@ -17,10 +17,13 @@ import matplotlib.pyplot as plt
 import plotly.express as px
 import xlwings as xw
 
+st.set_page_config(page_title="Future1")
+st.markdown("<p style='font-family: impact; font-size: 125px; font-style: italic; text-align: center; margin-bottom: 0px;'>Future1</p>", unsafe_allow_html=True)
+st.markdown("<p style='font-family: impact; font-size: 16px; text-align: center; margin-top: 0px;'>See the future in 1 click</p>", unsafe_allow_html=True)
 
-st.write("""
+#st.write("""
 # Forecasting Engine Application
-""")
+#""")
 
 st.sidebar.header("User Input Features")
 
