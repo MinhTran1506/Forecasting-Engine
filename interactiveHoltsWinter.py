@@ -53,7 +53,7 @@ if uploaded_file is not None:
     except pd.errors.EmptyDataError:
         st.error("Uploaded CSV file is empty.")
 else:
-    df = pd.read_csv("Holts-Winter-data-input-VNHOLSC064.csv")
+    df = pd.read_csv("Holts-Winter-data-input-VNHOLSC064.csv", index_col=False)
     
 def download_excel_file(df):
     output = io.BytesIO()
@@ -202,11 +202,12 @@ with tabs[0]:
 
     FC = holts_winter_forecast_result(value_alpha, value_beta, value_gamma, value_period)
     FC = pd.DataFrame(FC)
+    FC = FC.reset_index(drop=True)
     FC = FC.rename(columns={0: 'Forecast'})
 
     if st.button('View data in Excel (Holt-Winters)'):
         st.subheader("Forecast Data")
-        st.write(pd.concat([FC, df], axis=1))
+        st.write(pd.concat([df, FC], axis=1))
         # Call the function to generate the Excel file
         excel_file = download_excel_file(FC)
         st.download_button(label='Download Excel (Holt-Winters)', data=excel_file, file_name='holt_winters_forecast.xlsx', mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
@@ -255,7 +256,7 @@ with tabs[1]:
     st.plotly_chart(fig)
     if st.button('View data in Excel (Prophet)'):
         st.subheader("Forecast Data")
-        st.write(pd.concat([prophet_forecast[['ds', 'yhat']], df], axis=1))
+        st.write(pd.concat([df, prophet_forecast[['yhat']]], axis=1))
         # Call the function to generate the Excel file
         excel_file = download_excel_file(prophet_forecast[['ds', 'yhat']])
         st.download_button(label='Download Excel (Prophet)', data=excel_file, file_name='prophet_forecast.xlsx', mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
