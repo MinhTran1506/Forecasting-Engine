@@ -202,14 +202,14 @@ with tabs[0]:
 
     FC = holts_winter_forecast_result(value_alpha, value_beta, value_gamma, value_period)
     FC = pd.DataFrame(FC)
-    FC = FC.reset_index(drop=True)
     FC = FC.rename(columns={0: 'Forecast'})
 
     if st.button('View data in Excel (Holt-Winters)'):
         st.subheader("Forecast Data")
-        st.write(pd.concat([df, FC], axis=1))
+        FC_data = pd.concat([df, FC], axis=1)
+        st.write(FC_data)
         # Call the function to generate the Excel file
-        excel_file = download_excel_file(FC)
+        excel_file = download_excel_file(FC_data)
         st.download_button(label='Download Excel (Holt-Winters)', data=excel_file, file_name='holt_winters_forecast.xlsx', mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
 
 
@@ -256,9 +256,12 @@ with tabs[1]:
     st.plotly_chart(fig)
     if st.button('View data in Excel (Prophet)'):
         st.subheader("Forecast Data")
-        st.write(pd.concat([df, prophet_forecast[['yhat']]], axis=1))
+        yhat_column = prophet_forecast[['yhat']]
+        yhat_column = yhat_column.rename(columns={"yhat": "Forecast"})
+        Prophet_data = pd.concat([df, yhat_column], axis=1)
+        st.write(Prophet_data)
         # Call the function to generate the Excel file
-        excel_file = download_excel_file(prophet_forecast[['ds', 'yhat']])
+        excel_file = download_excel_file(Prophet_data)
         st.download_button(label='Download Excel (Prophet)', data=excel_file, file_name='prophet_forecast.xlsx', mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
 
 
