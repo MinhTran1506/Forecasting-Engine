@@ -69,13 +69,12 @@ with tabs[0]:
     # Define function for interactive forecasting with Holt-Winter's method
     def holts_winter_forecast(alpha, beta, gamma, periods):
         # Fit the Winter-Holt's model
-       
-        if len(data) >= 24:
+        if series_length >= 24:
             model = ExponentialSmoothing(data, trend='add', seasonal='add', seasonal_periods=12, 
-                                    initialization_method="estimated")
+                                   initialization_method="estimated")
         else:
-            model = ExponentialSmoothing(data, trend='add', seasonal='add', seasonal_periods=3, 
-                                    initialization_method="estimated")
+            model = ExponentialSmoothing(data, trend='add', seasonal='add', seasonal_periods=3,
+                                   initialization_method="estimated")
 
         fitted_model = model.fit(smoothing_level=alpha, smoothing_slope=beta, smoothing_seasonal=gamma)
         optimized_model = model.fit(optimized = True)
@@ -120,13 +119,12 @@ with tabs[0]:
     #this function is the same like the previous one but without visualization
     def holts_winter_forecast_result(alpha, beta, gamma, periods):
         # Fit the Winter-Holt's model
-
-        if len(data) >= 24:
+        if series_length >= 24:
             model = ExponentialSmoothing(data, trend='add', seasonal='add', seasonal_periods=12, 
-                                    initialization_method="estimated")
+                                   initialization_method="estimated")
         else:
-            model = ExponentialSmoothing(data, trend='add', seasonal='add', seasonal_periods=3, 
-                                    initialization_method="estimated")
+            model = ExponentialSmoothing(data, trend='add', seasonal='add', seasonal_periods=3,
+                                   initialization_method="estimated")
 
         fitted_model = model.fit(smoothing_level=alpha, smoothing_slope=beta, smoothing_seasonal=gamma)
         optimized_model = model.fit(optimized = True)
@@ -153,13 +151,8 @@ with tabs[0]:
     data = pd.Series(array)
 
     # Calculate optimized parameter for the Holt-Winter's model
-    if len(data) >= 24:
-        model = ExponentialSmoothing(data, trend='add', seasonal='add', seasonal_periods=12, 
-                                initialization_method="estimated")
-    else:
-        model = ExponentialSmoothing(data, trend='add', seasonal='add', seasonal_periods=3, 
-                                initialization_method="estimated")
-        
+    model = ExponentialSmoothing(data, trend='add', seasonal='add', seasonal_periods=12, 
+                            initialization_method="estimated")
     optimized_model = model.fit(optimized=True)
     opt_alpha = float(optimized_model.params['smoothing_level'])  # Convert to float
     opt_beta = float(optimized_model.params['smoothing_trend'])   # Convert to float
