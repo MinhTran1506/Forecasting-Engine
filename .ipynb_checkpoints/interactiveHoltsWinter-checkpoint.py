@@ -169,10 +169,10 @@ with tabs[0]:
         
 
     # Set the sliders to their default values
-    alpha_slider = st.sidebar.slider('Alpha:', min_value=0.0, max_value=1.0, step=0.01, value=opt_alpha, key="alpha")
-    beta_slider = st.sidebar.slider('Beta:', min_value=0.0, max_value=1.0, step=0.01, value=opt_beta, key="beta")
-    gamma_slider = st.sidebar.slider('Gamma:', min_value=0.0, max_value=1.0, step=0.01, value=opt_gamma, key="gamma")
-    periods_slider = st.sidebar.slider('Periods:', min_value=1, max_value=96, step=1, value=36, key="periods")
+    alpha_slider = st.sidebar.slider('Alpha:', min_value=0.0, max_value=1.0, step=0.01, value=opt_alpha)
+    beta_slider = st.sidebar.slider('Beta:', min_value=0.0, max_value=1.0, step=0.01, value=opt_beta)
+    gamma_slider = st.sidebar.slider('Gamma:', min_value=0.0, max_value=1.0, step=0.01, value=opt_gamma)
+    periods_slider = st.sidebar.slider('Periods:', min_value=1, max_value=96, step=1, value=36)
     
     st.sidebar.button("Reset", on_click=reset_value)
 
