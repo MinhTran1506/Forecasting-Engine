@@ -70,7 +70,11 @@ with tabs[0]:
     def holts_winter_forecast(alpha, beta, gamma, periods):
         # Fit the Winter-Holt's model
        
-        model = ExponentialSmoothing(data, trend='add', seasonal='add', seasonal_periods=12, 
+        if len(data) >= 24:
+            model = ExponentialSmoothing(data, trend='add', seasonal='add', seasonal_periods=12, 
+                                    initialization_method="estimated")
+        else:
+            model = ExponentialSmoothing(data, trend='add', seasonal='add', seasonal_periods=3, 
                                     initialization_method="estimated")
 
         fitted_model = model.fit(smoothing_level=alpha, smoothing_slope=beta, smoothing_seasonal=gamma)
@@ -117,7 +121,11 @@ with tabs[0]:
     def holts_winter_forecast_result(alpha, beta, gamma, periods):
         # Fit the Winter-Holt's model
 
-        model = ExponentialSmoothing(data, trend='add', seasonal='add', seasonal_periods=12, 
+        if len(data) >= 24:
+            model = ExponentialSmoothing(data, trend='add', seasonal='add', seasonal_periods=12, 
+                                    initialization_method="estimated")
+        else:
+            model = ExponentialSmoothing(data, trend='add', seasonal='add', seasonal_periods=3, 
                                     initialization_method="estimated")
 
         fitted_model = model.fit(smoothing_level=alpha, smoothing_slope=beta, smoothing_seasonal=gamma)
@@ -145,10 +153,12 @@ with tabs[0]:
     data = pd.Series(array)
 
     # Calculate optimized parameter for the Holt-Winter's model
-
-    model = ExponentialSmoothing(data, trend='add', seasonal='add', seasonal_periods=12, 
+    if len(data) >= 24:
+        model = ExponentialSmoothing(data, trend='add', seasonal='add', seasonal_periods=12, 
                                 initialization_method="estimated")
-
+    else:
+        model = ExponentialSmoothing(data, trend='add', seasonal='add', seasonal_periods=3, 
+                                initialization_method="estimated")
         
     optimized_model = model.fit(optimized=True)
     opt_alpha = float(optimized_model.params['smoothing_level'])  # Convert to float
@@ -227,8 +237,8 @@ with tabs[1]:
     
     a = '2020-12-01'
     a = pd.to_datetime(a)
-    months = pd.DateOffset(months=len(prophet)-1)
-    endtime = a + months
+    one_month = pd.DateOffset(months=len(prophet)-1)
+    endtime = a + one_month
     
     prophet['ds'] = pd.date_range('2020-12-01', endtime, freq='MS')
     prophet['ds']= to_datetime(prophet['ds'])
