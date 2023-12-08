@@ -223,14 +223,14 @@ with tabs[0]:
         st.subheader("Forecast Data")
         
         starttime = '2020-12-01'
-        starttime = pd.to_datetime(starttime)
+        starttime = pd.to_datetime(starttime, format='%Y-%m-%d')
         month = pd.DateOffset(months=len(hw)-1)
         endtime = starttime + month
 
         time_range = pd.date_range(starttime, endtime , freq='MS')
         time_range = pd.DataFrame(time_range)
         time_range = time_range.rename(columns={0: "Time"})
-        time_range['Time'] = pd.to_datetime(time_range['Time']).dt.to_period('m')
+        time_range['Time'] = pd.to_datetime(time_range['Time'], format='%Y-%m-%d').dt.to_period('m')
 
         FC_data = pd.concat([time_range, hw, FC], axis=1)
         st.write(FC_data)
@@ -247,7 +247,7 @@ with tabs[1]:
     prophet = prophet.rename(columns={'Vol': 'y'})
     
     start = '2020-12-01'
-    start = pd.to_datetime(start)
+    start = pd.to_datetime(start, format='%Y-%m-%d')
     month1 = pd.DateOffset(months=len(prophet)-1)
     end = start + month1
 
@@ -287,7 +287,7 @@ with tabs[1]:
     st.plotly_chart(fig)
     if st.button('View data in Excel (Prophet)'):
         st.subheader("Forecast Data")
-        prophet_forecast['ds'] = pd.to_datetime(prophet_forecast['ds']).dt.to_period('m')
+        prophet_forecast['ds'] = pd.to_datetime(prophet_forecast['ds'], format='%Y-%m-%d').dt.to_period('m')
         yhat_column = prophet_forecast[['ds','yhat']]
         yhat_column = yhat_column.rename(columns={"ds": "Time","yhat": "Forecast"})
         actual = df.rename(columns={"Vol": "Actual"})
