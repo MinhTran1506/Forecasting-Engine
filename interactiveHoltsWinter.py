@@ -232,7 +232,7 @@ with tabs[0]:
         time_range = time_range.rename(columns={0: "Time"})
         time_range['Time'] = pd.to_datetime(time_range['Time']).dt.to_period('m')
 
-        FC_data = pd.concat([time_range, df, FC], axis=1)
+        FC_data = pd.concat([time_range, hw, FC], axis=1)
         st.write(FC_data)
         # Call the function to generate the Excel file
         excel_file = download_excel_file(FC_data)
@@ -248,10 +248,10 @@ with tabs[1]:
     
     start = '2020-12-01'
     start = pd.to_datetime(start)
-    months = pd.DateOffset(months=len(prophet)-1)
-    endtime = start + months
+    month1 = pd.DateOffset(months=len(prophet)-1)
+    end = start + month1
 
-    prophet['ds'] = pd.date_range(start, endtime, freq='MS')
+    prophet['ds'] = pd.date_range(start, end, freq='MS')
     prophet['ds']= to_datetime(prophet['ds'])
     prophet = prophet[['ds','y']]
 
@@ -289,10 +289,10 @@ with tabs[1]:
         st.subheader("Forecast Data")
         prophet_forecast['ds'] = pd.to_datetime(prophet_forecast['ds']).dt.to_period('m')
         yhat_column = prophet_forecast[['ds','yhat']]
-        yhat_column = yhat_column.rename(columns={"yhat": "Forecast"})
-        df = df.rename(columns={"Vol": "Actual"})
-        Prophet_data = pd.concat([yhat_column, df], axis=1)
-        Prophet_data = Prophet_data[['ds', 'Actual','Forecast']]
+        yhat_column = yhat_column.rename(columns={"ds": "Time","yhat": "Forecast"})
+        actual = df.rename(columns={"Vol": "Actual"})
+        Prophet_data = pd.concat([yhat_column, actual], axis=1)
+        Prophet_data = Prophet_data[['Time', 'Actual','Forecast']]
         st.write(Prophet_data)
         # Call the function to generate the Excel file
         excel_file = download_excel_file(Prophet_data)
