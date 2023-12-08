@@ -216,9 +216,24 @@ with tabs[0]:
     FC = pd.DataFrame(FC)
     FC = FC.rename(columns={0: 'Forecast'})
 
+    hw = pd.DataFrame(df)
+    hw = hw.rename(columns={'Vol': 'Actual'})
+
+    starttime = '2020-12-01'
+
     if st.button('View data in Excel (Holt-Winters)'):
         st.subheader("Forecast Data")
-        FC_data = pd.concat([df, FC], axis=1)
+        
+        starttime = pd.to_datetime(starttime)
+        month = pd.DateOffset(months=len(hw)-1)
+        endtime = starttime + month
+
+        time_range = pd.date_range(starttime, endtime , freq='MS')
+        time_range = pd.DataFrame(time_range)
+        time_range = time_range.rename(columns={0: "Actual"})
+        time_range['Actual'] = pd.to_datetime(time_range['Actual']).dt.to_period('m')
+
+        FC_data = pd.concat([time_range, df, FC], axis=1)
         st.write(FC_data)
         # Call the function to generate the Excel file
         excel_file = download_excel_file(FC_data)
@@ -232,11 +247,11 @@ with tabs[1]:
     prophet = pd.DataFrame(df)
     prophet = prophet.rename(columns={'Vol': 'y'})
     
-    a = '2020-12-01'
-    a = pd.to_datetime(a)
+    starttime = pd.to_datetime(starttime)
     months = pd.DateOffset(months=len(prophet)-1)
-    endtime = a + months
-    prophet['ds'] = pd.date_range('2020-12-01', endtime, freq='MS')
+    endtime = starttime + months
+
+    prophet['ds'] = pd.date_range(starttime, endtime, freq='MS')
     prophet['ds']= to_datetime(prophet['ds'])
     prophet = prophet[['ds','y']]
 
@@ -272,9 +287,12 @@ with tabs[1]:
     st.plotly_chart(fig)
     if st.button('View data in Excel (Prophet)'):
         st.subheader("Forecast Data")
-        yhat_column = prophet_forecast[['yhat']]
+        prophet_forecast['ds'] = pd.to_datetime(prophet_forecast['ds']).dt.to_period('m')
+        yhat_column = prophet_forecast[['ds','yhat']]
         yhat_column = yhat_column.rename(columns={"yhat": "Forecast"})
-        Prophet_data = pd.concat([df, yhat_column], axis=1)
+        df = df.rename(columns={"Vol": "Actual"})
+        Prophet_data = pd.concat([yhat_column, df], axis=1)
+        Prophet_data = Prophet_data[['ds', 'Actual','Forecast']]
         st.write(Prophet_data)
         # Call the function to generate the Excel file
         excel_file = download_excel_file(Prophet_data)
