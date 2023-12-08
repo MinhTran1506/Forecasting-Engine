@@ -232,7 +232,13 @@ with tabs[0]:
         time_range = time_range.rename(columns={0: "Time"})
         time_range['Time'] = pd.to_datetime(time_range['Time'], format='%Y-%m-%d').dt.to_period('m')
 
-        FC_data = pd.concat([time_range, hw, FC], axis=1)
+        time_string = []
+        for i in time_range['Time']:
+            i = i.strftime('%Y-%m')
+            time_string.append(i)
+        time_string = pd.DataFrame(time_string)
+
+        FC_data = pd.concat([time_string, hw, FC], axis=1)
         st.write(FC_data)
         # Call the function to generate the Excel file
         excel_file = download_excel_file(FC_data)
@@ -288,6 +294,7 @@ with tabs[1]:
     if st.button('View data in Excel (Prophet)'):
         st.subheader("Forecast Data")
         prophet_forecast['ds'] = pd.to_datetime(prophet_forecast['ds'], format='%Y-%m-%d').dt.to_period('m')
+        
         yhat_column = prophet_forecast[['ds','yhat']]
         yhat_column = yhat_column.rename(columns={"ds": "Time","yhat": "Forecast"})
         actual = df.rename(columns={"Vol": "Actual"})
