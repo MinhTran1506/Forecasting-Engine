@@ -236,7 +236,7 @@ with tabs[0]:
         for i in time_range['Time']:
             i = i.strftime('%Y-%m')
             time_string.append(i)
-        time_string = pd.DataFrame(time_string)
+        time_string = pd.DataFrame(time_string, columns=["Time"])
 
         FC_data = pd.concat([time_string, hw, FC], axis=1)
         st.write(FC_data)
