@@ -293,13 +293,18 @@ with tabs[1]:
     st.plotly_chart(fig)
     if st.button('View data in Excel (Prophet)'):
         st.subheader("Forecast Data")
-        prophet_forecast['ds'] = pd.to_datetime(prophet_forecast['ds'], format='%Y-%m-%d').dt.to_period('m')
+        time_range_2 = pd.to_datetime(prophet_forecast['ds'], format='%Y-%m-%d').dt.to_period('m')
         
-        yhat_column = prophet_forecast[['ds','yhat']]
-        yhat_column = yhat_column.rename(columns={"ds": "Time","yhat": "Forecast"})
+        time_string_2 = []
+        for i in time_range_2:
+            i = i.strftime('%Y-%m')
+            time_string_2.append(i)
+        time_string_2 = pd.DataFrame(time_string_2, columns=["Time"])
+
+        yhat_column = prophet_forecast[['yhat']]
+        yhat_column = yhat_column.rename(columns={"yhat": "Forecast"})
         actual = df.rename(columns={"Vol": "Actual"})
-        Prophet_data = pd.concat([yhat_column, actual], axis=1)
-        Prophet_data = Prophet_data[['Time', 'Actual','Forecast']]
+        Prophet_data = pd.concat([time_string_2, actual, yhat_column], axis=1)
         st.write(Prophet_data)
         # Call the function to generate the Excel file
         excel_file = download_excel_file(Prophet_data)
