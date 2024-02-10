@@ -35,7 +35,7 @@ uploaded_file = st.sidebar.file_uploader("Upload you input CSV file", type=["csv
 
 tab_titles = [
     "Holt-Winters",
-    "Prophet",
+    "Auto-Future",
     "ARIMA"
 ]
 tabs = st.tabs(tab_titles)
@@ -219,7 +219,7 @@ with tabs[0]:
     hw = pd.DataFrame(df)
     hw = hw.rename(columns={'Vol': 'Actual'})
 
-    if st.button('View data in Excel (Holt-Winters)'):
+    if st.button('View result (Holt-Winters)'):
         st.subheader("Forecast Data")
         
         starttime = '2020-12-01'
@@ -264,7 +264,7 @@ with tabs[1]:
     fig = px.line(prophet, x="ds", y="y", hover_data=['ds', 'y'])
 
     # Show the plot
-    st.plotly_chart(fig)
+    #st.plotly_chart(fig) #remove unnecessary plot
 
     prophet_model = Prophet(interval_width=0.95)
     prophet_model.fit(prophet)
@@ -278,10 +278,10 @@ with tabs[1]:
     y = prophet_forecast['yhat']
     mape_prophet = round(np.mean(np.abs((test_prophet[-12:] - y[:len(test_prophet)]) / test_prophet)) * 100, 2)
 
-    st.subheader("Prophet Forecast Diagram")
+    st.subheader("Auto-Future Forecast Diagram")
     plt.figure(figsize=(30, 15))
     prophet_model.plot(prophet_forecast, xlabel='Date', ylabel='Forecast')
-    plt.title('Prophet Forecast')
+    plt.title('Auto-Future Forecast')
 
     # Show the Prophet plot using st.pyplot()
     st.pyplot(plt.gcf())
@@ -291,7 +291,7 @@ with tabs[1]:
                     hover_data=['ds', 'yhat'])
     # Show the plot
     st.plotly_chart(fig)
-    if st.button('View data in Excel (Prophet)'):
+    if st.button('View result (Auto-Future)'):
         st.subheader("Forecast Data")
         time_range_2 = pd.to_datetime(prophet_forecast['ds'], format='%Y-%m-%d').dt.to_period('m')
         
@@ -308,7 +308,7 @@ with tabs[1]:
         st.write(Prophet_data)
         # Call the function to generate the Excel file
         excel_file = download_excel_file(Prophet_data)
-        st.download_button(label='Download Excel (Prophet)', data=excel_file, file_name='prophet_forecast.xlsx', mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+        st.download_button(label='Download Excel (Auto-Future)', data=excel_file, file_name='prophet_forecast.xlsx', mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
 
 
 #def download_excel_file(df):
