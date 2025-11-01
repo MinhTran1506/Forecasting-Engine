@@ -56,10 +56,15 @@ else:
     df = pd.read_csv("Holts-Winter-data-input-VNHOLSC064.csv", index_col=False)
     
 def download_excel_file(df):
+    """
+    Generates a Pandas DataFrame as an Excel file in a BytesIO buffer.
+    Uses the modern pd.ExcelWriter context manager pattern.
+    """
     output = io.BytesIO()
-    writer = pd.ExcelWriter(output, engine='xlsxwriter')
-    df.to_excel(writer, sheet_name='Sheet1', index=False)
-    writer.save()
+    # Using 'with' statement handles saving and closing automatically
+    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+        df.to_excel(writer, sheet_name='Sheet1', index=False)
+    
     excel_file = output.getvalue()
     output.seek(0)
     return excel_file
