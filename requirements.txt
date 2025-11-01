@@ -8,3 +8,4 @@ seaborn
 plotly-express
 openpyxl
 xlsxwriter
+scikit-learn>=1.4.0
