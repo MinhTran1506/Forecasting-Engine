@@ -1,0 +1,56 @@
+# 🐍 Python
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+eggs/
+*.egg-info/
+.installed.cfg
+*.egg
+data/
+# Installer logs
+pip-log.txt
+pip-delete-this-file.txt
+
+# Unit test / coverage reports
+.pytest_cache/
+.coverage
+htmlcov/
+.nox/
+
+# Virtual environment
+.venv
+venv/
+env/
+
+# MyPy
+.mypy_cache/
+
+# Jupyter Notebook (if used)
+.ipynb_checkpoints
+
+# IDE and Editor Directories/Files (Common)
+.idea/             # PyCharm/IntelliJ IDEA
+.vscode/           # Visual Studio Code
+*.sublime-project  # Sublime Text
+*.sublime-workspace
+.DS_Store          # macOS
+
+---
+
+# 📊 Streamlit Specific Files and Directories
+# Streamlit creates a local cache for files and data
+.streamlit/              # Includes config, credentials, and app cache
+cache/                   # Older Streamlit versions used a 'cache' dir
+
+# Custom component build directories (if you use custom components)
+frontend/build/

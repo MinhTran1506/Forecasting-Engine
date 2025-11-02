@@ -12,3 +12,4 @@ xlsxwriter
 scikit-learn>=1.4.0
 ipywidgets
 xlwings
+scipy>=1.11.0
