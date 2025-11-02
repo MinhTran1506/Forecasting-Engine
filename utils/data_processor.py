@@ -13,6 +13,39 @@ class DataProcessor:
             '%Y-%m-%d', '%m/%d/%Y', '%d/%m/%Y', '%Y/%m/%d',
             '%m-%d-%Y', '%d-%m-%Y', '%Y%m%d'
         ]
+
+    def remove_outliers(self, series, threshold=3.0):
+        """Remove outliers using z-score method"""
+        mean = np.mean(series)
+        std = np.std(series)
+        z_scores = np.abs((series - mean) / std)
+        mask = z_scores < threshold
+        
+        removed = len(series) - mask.sum()
+        if removed > 0:
+            st.info(f"📊 Removed {removed} outliers ({removed/len(series)*100:.1f}% of data)")
+        
+        return series[mask], mask
+    
+    def smooth_series(self, series, window=3):
+        """Apply moving average smoothing"""
+        smoothed = pd.Series(series).rolling(window=window, center=True).mean()
+        # Fill NaN values at edges
+        smoothed = smoothed.fillna(method='bfill').fillna(method='ffill')
+        return smoothed.values
+    
+    def log_transform_series(self, series):
+        """Apply log transformation (handles zeros)"""
+        # Add small constant to avoid log(0)
+        min_val = series.min()
+        if min_val <= 0:
+            shift = abs(min_val) + 1
+            series = series + shift
+        return np.log(series)
+    
+    def inverse_log_transform(self, series, shift=0):
+        """Inverse log transformation"""
+        return np.exp(series) - shift
     
     def load_data(self, file):
         """Load data from CSV or Excel file"""
@@ -79,15 +112,25 @@ class DataProcessor:
     
     def parse_date(self, date_series):
         """Parse date series with multiple format attempts"""
+        # First, try pandas auto-detection (most robust)
+        try:
+            parsed = pd.to_datetime(date_series, infer_datetime_format=True)
+            if parsed.notna().sum() / len(parsed) >= 0.8:  # 80% success rate
+                return parsed
+        except:
+            pass
+        
+        # Try common formats explicitly
         for fmt in self.date_formats:
             try:
-                return pd.to_datetime(date_series, format=fmt)
+                parsed = pd.to_datetime(date_series, format=fmt, errors='coerce')
+                if parsed.notna().sum() / len(parsed) >= 0.8:
+                    return parsed
             except:
                 continue
-        
-        # If all fail, use pandas auto-detection
+
         try:
-            return pd.to_datetime(date_series)
+            return pd.to_datetime(date_series, errors='coerce')
         except:
             return None
     
@@ -106,22 +149,44 @@ class DataProcessor:
         """
         df_copy = df.copy()
         
-        # Parse dates
+        # Parse dates with improved handling
+        st.info(f"📅 Parsing dates from column: {date_col}")
         df_copy[date_col] = self.parse_date(df_copy[date_col])
         
-        if df_copy[date_col].isna().any():
-            st.warning("Some dates could not be parsed. They will be excluded.")
+        # Check for parsing failures
+        failed_dates = df_copy[date_col].isna().sum()
+        if failed_dates > 0:
+            st.warning(f"⚠️ Could not parse {failed_dates} dates ({failed_dates/len(df_copy)*100:.1f}%). These rows will be excluded.")
             df_copy = df_copy.dropna(subset=[date_col])
+        
+        if len(df_copy) == 0:
+            st.error("❌ No valid dates found. Please check your date column format.")
+            return None
+        
+        st.success(f"✅ Successfully parsed {len(df_copy)} dates")
+        
+        # Show date range
+        min_date = df_copy[date_col].min()
+        max_date = df_copy[date_col].max()
+        st.info(f"📊 Date range: {min_date.strftime('%Y-%m-%d')} to {max_date.strftime('%Y-%m-%d')}")
         
         # Aggregation
         if agg_cols:
+            st.info(f"🔄 Aggregating by: {', '.join([date_col] + agg_cols)}")
             group_cols = [date_col] + agg_cols
             ts_data = df_copy.groupby(group_cols)[value_col].sum().reset_index()
         else:
+            st.info(f"🔄 Aggregating by: {date_col}")
             ts_data = df_copy.groupby(date_col)[value_col].sum().reset_index()
         
         # Sort by date
         ts_data = ts_data.sort_values(date_col).reset_index(drop=True)
+        
+        st.success(f"✅ Aggregated to {len(ts_data)} time periods")
+        
+        # Display sample of aggregated data
+        with st.expander("👀 Preview Aggregated Data"):
+            st.dataframe(ts_data.head(10), use_container_width=True)
         
         return ts_data
     
