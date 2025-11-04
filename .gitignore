@@ -48,6 +48,6 @@ env/
 
 # 📊 Streamlit Specific Files and Directories
 # Streamlit creates a local cache for files and data
-.streamlit/             # Includes config, credentials, and app cache
-cache/                   # Older Streamlit versions used a 'cache' dir
+.streamlit/
+cache/
 
