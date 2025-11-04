@@ -152,7 +152,7 @@ Contributions welcome! Please read CONTRIBUTING.md
 
 For issues and questions:
 - GitHub Issues
-- Email: support@future1pro.com
+- Email: minhtranquang824@gmail.com
 - Documentation: docs.future1pro.com
 
 ## 🎓 Credits
