@@ -1,33 +1,37 @@
 """
 Authentication module for Future1 Pro
 Supports: Basic Auth, OAuth (Google/GitHub), and Session Management
+
+SECURITY NOTE: 
+- For production, store credentials in Streamlit secrets or environment variables
+- Never commit passwords to GitHub
 """
 
 import streamlit as st
 import hashlib
 import json
 from datetime import datetime, timedelta
+import os
 
 class Authenticator:
     def __init__(self):
-        # In production, store these securely (environment variables, database, etc.)
-        self.users = {
-            "admin": {
-                "password": hashlib.sha256("admin123".encode()).hexdigest(),
-                "role": "admin",
-                "name": "Administrator"
-            },
-            "user": {
-                "password": hashlib.sha256("user123".encode()).hexdigest(),
-                "role": "user",
-                "name": "Regular User"
-            },
-            "analyst": {
-                "password": hashlib.sha256("analyst123".encode()).hexdigest(),
-                "role": "analyst",
-                "name": "Data Analyst"
-            }
-        }
+        # Load users from Streamlit secrets (production) or environment variables
+        # Priority: Streamlit secrets > Environment variables > Default (dev only)
+        
+        if hasattr(st, 'secrets') and 'users' in st.secrets:
+            # Production: Load from Streamlit secrets
+            self.users = dict(st.secrets['users'])
+        elif 'FUTURE1_USERS' in os.environ:
+            # Alternative: Load from environment variable (JSON format)
+            self.users = json.loads(os.environ['FUTURE1_USERS'])
+        else:
+            # 🚨 SECURITY REQUIREMENT: No default credentials allowed.
+            # If this block is reached, it means the application is not configured 
+            # for production or testing. Raise an error to prevent startup.
+            raise EnvironmentError(
+                "User credentials not found. Please configure 'users' in Streamlit secrets "
+                "or set the 'FUTURE1_USERS' environment variable."
+            )
         
     def check_password(self, username, password):
         """Verify username and password"""
@@ -47,7 +51,7 @@ class Authenticator:
         
         col1, col2, col3 = st.columns([1, 2, 1])
         with col2:
-            st.subheader("🔐 Secure Login")
+            st.subheader("🔐 Login")
             
             # Login form
             with st.form("login_form"):
@@ -79,14 +83,17 @@ class Authenticator:
                 if oauth_button:
                     st.info("🔗 OAuth integration (Google/GitHub) available in enterprise version")
             
-            # Demo credentials
-            # with st.expander("📋 Demo Credentials"):
-            #     st.markdown("""
-            #     **Available accounts:**
-            #     - **Admin**: username: `admin`, password: `admin123`
-            #     - **User**: username: `user`, password: `user123`
-            #     - **Analyst**: username: `analyst`, password: `analyst123`
-            #     """)
+            # Demo credentials (only show in development mode)
+            if not (hasattr(st, 'secrets') and 'users' in st.secrets):
+                with st.expander("📋 Demo Credentials (Development Only)"):
+                    st.markdown("""
+                    **Available accounts:**
+                    - **Admin**: username: `admin`, password: `admin123`
+                    - **User**: username: `user`, password: `user123`
+                    - **Analyst**: username: `analyst`, password: `analyst123`
+                    
+                    ⚠️ **These are for development only. In production, use Streamlit secrets.**
+                    """)
             
             # Security features
             st.markdown("---")

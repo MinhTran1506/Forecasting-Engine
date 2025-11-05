@@ -39,9 +39,9 @@ env/
 .ipynb_checkpoints
 
 # IDE and Editor Directories/Files (Common)
-.idea/             # PyCharm/IntelliJ IDEA
-.vscode/           # Visual Studio Code
-*.sublime-project  # Sublime Text
+.idea/
+.vscode/
+*.sublime-project
 *.sublime-workspace
 
 ---

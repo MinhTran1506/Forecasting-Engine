@@ -48,20 +48,24 @@ def render(df):
             help="Select the numeric column you want to forecast"
         )
     
-    # Aggregation options
+    # Aggregation options - train models with grouping
     categorical_cols = df.select_dtypes(include=['object']).columns.tolist()
     categorical_cols = [c for c in categorical_cols if c != selected_date]
     
+    st.markdown("### 🎚️ Forecast Granularity")
+    st.markdown("Choose how to group your data for forecasting")
+    
     if categorical_cols:
         agg_level = st.multiselect(
-            "🎚️ Group By (Optional)",
+            "Group By (creates separate forecasts for each combination)",
             categorical_cols,
-            help="Select columns to group by for multi-level forecasting"
+            help="E.g., Group by Product + Region to forecast each Product-Region combination"
         )
     else:
         agg_level = []
     
     # Forecast configuration
+    st.markdown("### ⚙️ Forecast Settings")
     col1, col2, col3 = st.columns(3)
     with col1:
         forecast_periods = st.slider("🔮 Forecast Periods", 1, 60, 12)
@@ -227,7 +231,7 @@ def render(df):
                 # Train all models
                 progress_bar = st.progress(0)
                 status_text = st.empty()
-
+                
                 all_results = {}
                 
                 for idx, model_name in enumerate(model_names):
@@ -263,236 +267,351 @@ def render(df):
                     key=lambda x: x[1]['metrics']['MAPE']
                 )
                 
-                st.success(f"🎉 Successfully trained {len(all_results)} models!")
-                
-                # Display results
-                st.markdown("---")
-                st.subheader("🏆 Model Performance Ranking")
-                
-                # Performance interpretation
-                best_mape = sorted_models[0][1]['metrics']['MAPE']
-                
-                if best_mape < 10:
-                    accuracy_level = "🟢 Excellent"
-                    accuracy_desc = "Highly accurate forecasts suitable for critical decisions"
-                elif best_mape < 20:
-                    accuracy_level = "🟡 Good"
-                    accuracy_desc = "Reliable forecasts for planning purposes"
-                elif best_mape < 30:
-                    accuracy_level = "🟠 Acceptable"
-                    accuracy_desc = "Moderate accuracy - use with caution"
-                elif best_mape < 50:
-                    accuracy_level = "🔴 Poor"
-                    accuracy_desc = "Low accuracy - consider data improvements"
-                else:
-                    accuracy_level = "⛔ Very Poor"
-                    accuracy_desc = "Not recommended for decision making"
-                
-                st.info(f"**Best Model Accuracy: {accuracy_level}** - {accuracy_desc}")
-                
-                # Improvement recommendations
-                if best_mape > 30:
-                    with st.expander("💡 Recommendations to Improve Accuracy", expanded=True):
-                        st.markdown("""
-                        ### 🔧 Actions to Take:
-                        
-                        **1. Reduce Test Set Size** ⚠️ PRIORITY
-                        - Current: {test_size} months
-                        - Recommended: 6-12 months maximum
-                        - More training data = better models
-                        
-                        **2. Check Data Quality**
-                        - Remove outliers (enable in Advanced Options)
-                        - Look for missing values or zeros
-                        - Verify data aggregation is correct
-                        
-                        **3. Add More Historical Data**
-                        - Current: {len_y} periods
-                        - Recommended: 36+ months for seasonal patterns
-                        - More data helps capture trends
-                        
-                        **4. Try Preprocessing**
-                        - Enable "Remove Outliers" option
-                        - Try "Smooth Data" for noisy data
-                        - Consider "Log Transform" for exponential growth
-                        
-                        **5. Consider External Factors**
-                        - Your data may be influenced by:
-                          - Promotions/marketing campaigns
-                          - Holidays and seasons
-                          - Economic conditions
-                          - Competitor actions
-                        - Simple models can't account for these!
-                        
-                        **6. Try Ensemble Methods**
-                        - Average predictions from top 3 models
-                        - Often more accurate than single model
-                        
-                        **7. Use Different Aggregation**
-                        - Try forecasting at different levels
-                        - Product-level vs. Total sales
-                        - Monthly vs. Weekly data
-                        """.format(test_size=test_size, len_y=len(y)))
-                
-                # Create performance table
-                performance_data = []
-                for rank, (name, result) in enumerate(sorted_models, 1):
-                    metrics = result['metrics']
-                    performance_data.append({
-                        'Rank': rank,
-                        'Model': name,
-                        'MAPE (%)': metrics['MAPE'],
-                        'MAE': metrics['MAE'],
-                        'RMSE': metrics['RMSE'],
-                        'R²': metrics['R²'],
-                        'SMAPE (%)': metrics['SMAPE']
-                    })
-                
-                perf_df = pd.DataFrame(performance_data)
-                
-                # Highlight top 3
-                def highlight_top3(row):
-                    if row['Rank'] <= 3:
-                        return ['background-color: #d4edda'] * len(row)
-                    return [''] * len(row)
-                
-                st.dataframe(
-                    perf_df.style.apply(highlight_top3, axis=1),
-                    use_container_width=True,
-                    hide_index=True
-                )
-                
-                # Best model recommendation
-                best_name, best_result = sorted_models[0]
-                st.success(f"🎯 **Recommended Model**: {best_name} (MAPE: {best_result['metrics']['MAPE']:.2f}%)")
-                
-                # Ensemble option
-                if len(sorted_models) >= 3:
-                    with st.expander("🎲 Ensemble Forecast (Advanced)", expanded=bool(best_mape > 30)):
-                        st.markdown("""
-                        **Ensemble forecasting** combines predictions from multiple models, 
-                        often achieving better accuracy than any single model.
-                        """)
-                        
-                        use_ensemble = st.checkbox("Use Ensemble Forecast", value=False)
-                        
-                        if use_ensemble:
-                            ensemble_size = st.slider("Number of models to combine", 2, min(5, len(sorted_models)), 3)
-                            
-                            # Calculate ensemble prediction
-                            ensemble_pred = np.mean([
-                                result['predictions'] 
-                                for _, result in sorted_models[:ensemble_size]
-                            ], axis=0)
-                            
-                            # Calculate ensemble metrics
-                            ensemble_metrics = ForecastMetrics.calculate_all(test_data, ensemble_pred)
-                            
-                            st.metric("Ensemble MAPE", f"{ensemble_metrics['MAPE']:.2f}%")
-                            
-                            improvement = best_mape - ensemble_metrics['MAPE']
-                            if improvement > 0:
-                                st.success(f"✅ Ensemble is {improvement:.2f}% better than best single model!")
-                            else:
-                                st.info(f"ℹ️ Best single model performs better by {-improvement:.2f}%")
-                            
-                            # Show which models are in ensemble
-                            st.write(f"**Models in ensemble (Top {ensemble_size}):**")
-                            for i, (name, _) in enumerate(sorted_models[:ensemble_size], 1):
-                                st.write(f"{i}. {name}")
-                
-                # Top 3 comparison
-                st.markdown("---")
-                st.subheader("📊 Top 3 Models Comparison")
-                
-                viz = Visualizer()
-                top3_predictions = {
-                    f"{name} ({result['metrics']['MAPE']:.2f}%)": result['predictions']
-                    for name, result in sorted_models[:3]
+                st.session_state.forecast_data = {
+                    'original_df': df,
+                    'ts_data': ts_data,
+                    'date_col': selected_date,
+                    'value_col': value_col,
+                    'agg_level': agg_level,
+                    'categorical_cols': categorical_cols
                 }
-                
-                fig = viz.plot_model_comparison(test_data, top3_predictions)
-                st.plotly_chart(fig, use_container_width=True)
-                
-                # Detailed metrics for top 3
-                with st.expander("📈 Detailed Metrics - Top 3 Models"):
-                    cols = st.columns(3)
-                    for idx, (name, result) in enumerate(sorted_models[:3]):
-                        with cols[idx]:
-                            st.markdown(f"**{name}**")
-                            metrics = result['metrics']
-                            st.metric("MAPE", f"{metrics['MAPE']:.2f}%")
-                            st.metric("MAE", f"{metrics['MAE']:.2f}")
-                            st.metric("RMSE", f"{metrics['RMSE']:.2f}")
-                            st.metric("R²", f"{metrics['R²']:.4f}")
-                
-                # Generate future forecast with best model
-                st.markdown("---")
-                st.subheader(f"🔮 Future Forecast ({forecast_periods} periods ahead)")
-                
-                with st.spinner(f'Generating forecast with {best_name}...'):
-                    try:
-                        # Retrain on full data
-                        future_result = factory.train_and_predict(
-                            best_name, y, forecast_periods
-                        )
-                        
-                        if future_result:
-                            future_forecast = future_result['predictions']
-                            
-                            # Plot future forecast
-                            fig_future = viz.plot_forecast(
-                                y, None, future_forecast,
-                                title=f"Future Forecast using {best_name}"
-                            )
-                            st.plotly_chart(fig_future, use_container_width=True)
-                            
-                            # Prepare export data
-                            if st.button("📥 Download All Results", type="primary"):
-                                output = io.BytesIO()
-                                
-                                with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-                                    # Performance comparison
-                                    perf_df.to_excel(writer, sheet_name='Model_Comparison', index=False)
-                                    
-                                    # Historical data
-                                    hist_df = pd.DataFrame({
-                                        'Date': dates,
-                                        'Actual': y
-                                    })
-                                    hist_df.to_excel(writer, sheet_name='Historical_Data', index=False)
-                                    
-                                    # Future forecast
-                                    last_date = pd.to_datetime(dates[-1])
-                                    future_dates = pd.date_range(
-                                        last_date + pd.DateOffset(months=1),
-                                        periods=forecast_periods,
-                                        freq='MS'
-                                    )
-                                    future_df = pd.DataFrame({
-                                        'Date': future_dates.strftime('%Y-%m'),
-                                        'Forecast': future_forecast,
-                                        'Model': best_name
-                                    })
-                                    future_df.to_excel(writer, sheet_name='Future_Forecast', index=False)
-                                    
-                                    # Top 3 model predictions
-                                    top3_df = pd.DataFrame({
-                                        name: result['predictions']
-                                        for name, result in sorted_models[:3]
-                                    })
-                                    top3_df.to_excel(writer, sheet_name='Top3_Predictions', index=False)
-                                
-                                st.download_button(
-                                    label='📥 Download Complete Analysis',
-                                    data=output.getvalue(),
-                                    file_name='multi_model_forecast_analysis.xlsx',
-                                    mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-                                )
-                    
-                    except Exception as e:
-                        st.error(f"Error generating future forecast: {e}")
-            
+
+                st.session_state.model_results = {
+                    'all_results': all_results,
+                    'sorted_models': sorted_models,
+                    'y': y,
+                    'dates': dates,
+                    'train_data': train_data,
+                    'test_data': test_data,
+                    'forecast_periods': forecast_periods,
+                    'factory': factory
+                }
             except Exception as e:
                 st.error(f"Error in multi-model analysis: {e}")
                 st.exception(e)
+
+                # Display results if available in session state
+    if 'model_results' in st.session_state and 'forecast_data' in st.session_state:
+        results = st.session_state.model_results
+        forecast_info = st.session_state.forecast_data
+        
+        sorted_models = results['sorted_models']
+        all_results = results['all_results']
+        y = results['y']
+        dates = results['dates']
+        test_data = results['test_data']
+        train_data = results['train_data']
+        forecast_periods = results['forecast_periods']
+        factory = results['factory']
+
+        # Display results
+        st.markdown("---")
+
+        st.subheader("🏆 Model Performance Ranking")
+        
+        # Performance interpretation
+        best_name, best_result = sorted_models[0]
+        best_mape = float(best_result['metrics']['MAPE'])  # Convert to Python float
+        
+        if best_mape < 10:
+            accuracy_level = "🟢 Excellent"
+            accuracy_desc = "Highly accurate forecasts suitable for critical decisions"
+        elif best_mape < 20:
+            accuracy_level = "🟡 Good"
+            accuracy_desc = "Reliable forecasts for planning purposes"
+        elif best_mape < 30:
+            accuracy_level = "🟠 Acceptable"
+            accuracy_desc = "Moderate accuracy - use with caution"
+        elif best_mape < 50:
+            accuracy_level = "🔴 Poor"
+            accuracy_desc = "Low accuracy - consider data improvements"
+        else:
+            accuracy_level = "⛔ Very Poor"
+            accuracy_desc = "Not recommended for decision making"
+        
+        st.info(f"**Best Model Accuracy: {accuracy_level}** - {accuracy_desc}")
+        
+        # Improvement recommendations
+        if best_mape > 30:
+            with st.expander("💡 Recommendations to Improve Accuracy", expanded=False):
+                st.markdown("""
+                ### 🔧 Actions to Take:
+                
+                **1. Reduce Test Set Size** ⚠️ PRIORITY
+                - Current: {test_size} months
+                - Recommended: 6-12 months maximum
+                - More training data = better models
+                
+                **2. Check Data Quality**
+                - Remove outliers (enable in Advanced Options)
+                - Look for missing values or zeros
+                - Verify data aggregation is correct
+                
+                **3. Add More Historical Data**
+                - Current: {len_y} periods
+                - Recommended: 36+ months for seasonal patterns
+                - More data helps capture trends
+                
+                **4. Try Preprocessing**
+                - Enable "Remove Outliers" option
+                - Try "Smooth Data" for noisy data
+                - Consider "Log Transform" for exponential growth
+                
+                **5. Consider External Factors**
+                - Your data may be influenced by:
+                  - Promotions/marketing campaigns
+                  - Holidays and seasons
+                  - Economic conditions
+                  - Competitor actions
+                - Simple models can't account for these!
+                
+                **6. Try Ensemble Methods**
+                - Average predictions from top 3 models
+                - Often more accurate than single model
+                
+                **7. Use Different Aggregation**
+                - Try forecasting at different levels
+                - Product-level vs. Total sales
+                - Monthly vs. Weekly data
+                """.format(test_size=test_size, len_y=len(y)))
+        
+        # Create performance table
+        performance_data = []
+        for rank, (name, result) in enumerate(sorted_models, 1):
+            metrics = result['metrics']
+            performance_data.append({
+                'Rank': rank,
+                'Model': name,
+                'MAPE (%)': metrics['MAPE'],
+                'MAE': metrics['MAE'],
+                'RMSE': metrics['RMSE'],
+                'R²': metrics['R²'],
+                'SMAPE (%)': metrics['SMAPE']
+            })
+        
+        perf_df = pd.DataFrame(performance_data)
+        
+        # Highlight top 3
+        def highlight_top3(row):
+            if row['Rank'] <= 3:
+                return ['background-color: #d4edda'] * len(row)
+            return [''] * len(row)
+        
+        st.dataframe(
+            perf_df.style.apply(highlight_top3, axis=1),
+            use_container_width=True,
+            hide_index=True
+        )
+        
+        # Best model recommendation
+        st.success(f"🎯 **Recommended Model**: {best_name} (MAPE: {best_mape:.2f}%)")
+        
+        # Ensemble option
+        if len(sorted_models) >= 3:
+            with st.expander("🎲 Ensemble Forecast (Advanced)", expanded=bool(best_mape > 30)):
+                st.markdown("""
+                **Ensemble forecasting** combines predictions from multiple models, 
+                often achieving better accuracy than any single model.
+                """)
+                
+                use_ensemble = st.checkbox("Use Ensemble Forecast", value=False)
+                
+                if use_ensemble:
+                    ensemble_size = st.slider("Number of models to combine", 2, min(5, len(sorted_models)), 3)
+                    
+                    # Calculate ensemble prediction
+                    ensemble_pred = np.mean([
+                        result['predictions'] 
+                        for _, result in sorted_models[:ensemble_size]
+                    ], axis=0)
+                    
+                    # Calculate ensemble metrics
+                    ensemble_metrics = ForecastMetrics.calculate_all(test_data, ensemble_pred)
+                    
+                    st.metric("Ensemble MAPE", f"{ensemble_metrics['MAPE']:.2f}%")
+                    
+                    improvement = best_mape - ensemble_metrics['MAPE']
+                    if improvement > 0:
+                        st.success(f"✅ Ensemble is {improvement:.2f}% better than best single model!")
+                    else:
+                        st.info(f"ℹ️ Best single model performs better by {-improvement:.2f}%")
+                    
+                    # Show which models are in ensemble
+                    st.write(f"**Models in ensemble (Top {ensemble_size}):**")
+                    for i, (name, _) in enumerate(sorted_models[:ensemble_size], 1):
+                        st.write(f"{i}. {name}")
+        
+        # Top 3 comparison
+        st.markdown("---")
+        st.subheader("📊 Top 3 Models Comparison")
+        
+        viz = Visualizer()
+        top3_predictions = {
+            f"{name} ({result['metrics']['MAPE']:.2f}%)": result['predictions']
+            for name, result in sorted_models[:3]
+        }
+        
+        fig = viz.plot_model_comparison(test_data, top3_predictions)
+        st.plotly_chart(fig, use_container_width=True)
+        
+        # Detailed metrics for top 3
+        with st.expander("📈 Detailed Metrics - Top 3 Models"):
+            cols = st.columns(3)
+            for idx, (name, result) in enumerate(sorted_models[:3]):
+                with cols[idx]:
+                    st.markdown(f"**{name}**")
+                    metrics = result['metrics']
+                    st.metric("MAPE", f"{metrics['MAPE']:.2f}%")
+                    st.metric("MAE", f"{metrics['MAE']:.2f}")
+                    st.metric("RMSE", f"{metrics['RMSE']:.2f}")
+                    st.metric("R²", f"{metrics['R²']:.4f}")
+        
+        # Generate future forecast with best model
+        st.markdown("---")
+        st.subheader(f"🔮 Future Forecast ({forecast_periods} periods ahead)")
+        
+        # Interactive Filtering Section
+        st.markdown("## 🔍 Interactive Forecast Explorer")
+        st.markdown("**Filter the visualization below to explore different scenarios**")
+        
+        # Get available filter columns
+        filter_cols = forecast_info['categorical_cols']
+        
+        if filter_cols:
+            # Create filter UI
+            st.markdown("### 📊 Visualization Filters")
+            col_filters = st.columns(min(4, len(filter_cols)))
+            
+            selected_filters = {}
+            for idx, col in enumerate(filter_cols[:4]):
+                with col_filters[idx]:
+                    # Get unique values from aggregated data
+                    if col in forecast_info['ts_data'].columns:
+                        unique_vals = ['All'] + sorted(forecast_info['ts_data'][col].dropna().unique().tolist())
+                    else:
+                        unique_vals = ['All'] + sorted(forecast_info['original_df'][col].dropna().unique().tolist())
+                    
+                    selected_val = st.selectbox(
+                        f"🔎 {col}",
+                        unique_vals,
+                        key=f"viz_filter_{col}",
+                        help=f"Filter visualization by {col}"
+                    )
+                    
+                    if selected_val != 'All':
+                        selected_filters[col] = selected_val
+            
+            # More filters if needed
+            if len(filter_cols) > 4:
+                with st.expander("➕ More Filters"):
+                    more_cols = st.columns(3)
+                    for idx, col in enumerate(filter_cols[4:]):
+                        with more_cols[idx % 3]:
+                            if col in forecast_info['ts_data'].columns:
+                                unique_vals = ['All'] + sorted(forecast_info['ts_data'][col].dropna().unique().tolist())
+                            else:
+                                unique_vals = ['All'] + sorted(forecast_info['original_df'][col].dropna().unique().tolist())
+                            
+                            selected_val = st.selectbox(
+                                f"🔎 {col}",
+                                unique_vals,
+                                key=f"viz_filter_more_{col}",
+                                help=f"Filter visualization by {col}"
+                            )
+                            
+                            if selected_val != 'All':
+                                selected_filters[col] = selected_val
+            
+            # Apply filters to visualization data
+            filtered_ts = forecast_info['ts_data'].copy()
+            if selected_filters:
+                for col, val in selected_filters.items():
+                    if col in filtered_ts.columns:
+                        filtered_ts = filtered_ts[filtered_ts[col] == val]
+                
+                # Show filter summary
+                filter_summary = ', '.join([f"{k}={v}" for k, v in selected_filters.items()])
+                st.info(f"🔍 **Active Filters:** {filter_summary}")
+                st.info(f"📊 Showing: {len(filtered_ts)} time periods")
+                
+                if len(filtered_ts) == 0:
+                    st.warning("⚠️ No data matches these filters. Try different combinations.")
+                else:
+                    # Recalculate for filtered data
+                    filtered_y = filtered_ts[forecast_info['value_col']].values
+                    filtered_dates = filtered_ts[forecast_info['date_col']].values
+            else:
+                st.info("📊 **Viewing:** Overall/National forecast (no filters applied)")
+                filter_summary = ""
+                filtered_y = y
+                filtered_dates = dates
+        else:
+            filter_summary = ""
+            filtered_y = y
+            filtered_dates = dates
+            selected_filters = {}
+        
+        st.markdown("---")
+
+        with st.spinner(f'Generating forecast with {best_name}...'):
+            try:
+                # Retrain on full data
+                future_result = factory.train_and_predict(
+                    best_name, filtered_y, forecast_periods
+                )
+                
+                if future_result:
+                    future_forecast = future_result['predictions']
+                    
+                    # Plot future forecast
+                    fig_future = viz.plot_forecast(
+                        filtered_y, None, future_forecast,
+                        title=f"Future Forecast using {best_name}"
+                    )
+                    st.plotly_chart(fig_future, use_container_width=True)
+                    
+                    # Prepare export data
+                    if st.button("📥 Download All Results", type="primary"):
+                        output = io.BytesIO()
+                        
+                        with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+                            # Performance comparison
+                            perf_df.to_excel(writer, sheet_name='Model_Comparison', index=False)
+                            
+                            # Historical data
+                            hist_df = pd.DataFrame({
+                                'Date': filtered_dates,
+                                'Actual': filtered_y
+                            })
+                            hist_df.to_excel(writer, sheet_name='Historical_Data', index=False)
+                            
+                            # Future forecast
+                            last_date = pd.to_datetime(filtered_dates[-1])
+                            future_dates = pd.date_range(
+                                last_date + pd.DateOffset(months=1),
+                                periods=forecast_periods,
+                                freq='MS'
+                            )
+                            future_df = pd.DataFrame({
+                                'Date': future_dates.strftime('%Y-%m'),
+                                'Forecast': future_forecast,
+                                'Model': best_name
+                            })
+                            future_df.to_excel(writer, sheet_name='Future_Forecast', index=False)
+                            
+                            # Top 3 model predictions
+                            top3_df = pd.DataFrame({
+                                name: result['predictions']
+                                for name, result in sorted_models[:3]
+                            })
+                            top3_df.to_excel(writer, sheet_name='Top3_Predictions', index=False)
+                        
+                        st.download_button(
+                            label='📥 Download Complete Analysis',
+                            data=output.getvalue(),
+                            file_name='multi_model_forecast_analysis.xlsx',
+                            mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+                        )
+            
+            except Exception as e:
+                st.error(f"Error generating future forecast: {e}")

@@ -150,7 +150,7 @@ class DataProcessor:
         df_copy = df.copy()
         
         # Parse dates with improved handling
-        st.info(f"📅 Parsing dates from column: {date_col}")
+        # st.info(f"📅 Parsing dates from column: {date_col}")
         df_copy[date_col] = self.parse_date(df_copy[date_col])
         
         # Check for parsing failures
@@ -159,31 +159,46 @@ class DataProcessor:
             st.warning(f"⚠️ Could not parse {failed_dates} dates ({failed_dates/len(df_copy)*100:.1f}%). These rows will be excluded.")
             df_copy = df_copy.dropna(subset=[date_col])
         
+        found_date = True
+
         if len(df_copy) == 0:
             st.error("❌ No valid dates found. Please check your date column format.")
+            found_date = False
             return None
         
-        st.success(f"✅ Successfully parsed {len(df_copy)} dates")
+        # st.success(f"✅ Successfully parsed {len(df_copy)} dates")
         
         # Show date range
         min_date = df_copy[date_col].min()
         max_date = df_copy[date_col].max()
-        st.info(f"📊 Date range: {min_date.strftime('%Y-%m-%d')} to {max_date.strftime('%Y-%m-%d')}")
+        # st.info(f"📊 Date range: {min_date.strftime('%Y-%m-%d')} to {max_date.strftime('%Y-%m-%d')}")
         
         # Aggregation
         if agg_cols:
-            st.info(f"🔄 Aggregating by: {', '.join([date_col] + agg_cols)}")
+            # st.info(f"🔄 Aggregating by: {', '.join([date_col] + agg_cols)}")
             group_cols = [date_col] + agg_cols
             ts_data = df_copy.groupby(group_cols)[value_col].sum().reset_index()
         else:
-            st.info(f"🔄 Aggregating by: {date_col}")
+            # st.info(f"🔄 Aggregating by: {date_col}")
             ts_data = df_copy.groupby(date_col)[value_col].sum().reset_index()
         
         # Sort by date
         ts_data = ts_data.sort_values(date_col).reset_index(drop=True)
         
-        st.success(f"✅ Aggregated to {len(ts_data)} time periods")
+        # st.success(f"✅ Aggregated to {len(ts_data)} time periods")
         
+        with st.expander("Extracted Data Information"):
+            st.info(f"📅 Parsing dates from column: {date_col}")
+            
+            if found_date:
+                st.success(f"✅ Successfully parsed {len(df_copy)} dates")
+                st.info(f"📊 Date range: {min_date.strftime('%Y-%m-%d')} to {max_date.strftime('%Y-%m-%d')}")
+                st.success(f"✅ Aggregated to {len(ts_data)} time periods")
+            if agg_cols:
+                st.info(f"🔄 Aggregating by: {', '.join([date_col] + agg_cols)}")
+            else:
+                st.info(f"🔄 Aggregating by: {date_col}")
+
         # Display sample of aggregated data
         with st.expander("👀 Preview Aggregated Data"):
             st.dataframe(ts_data.head(10), use_container_width=True)
