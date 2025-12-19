@@ -21,9 +21,6 @@ class DataProcessor:
         z_scores = np.abs((series - mean) / std)
         mask = z_scores < threshold
         
-        removed = len(series) - mask.sum()
-        if removed > 0:
-            st.info(f"📊 Removed {removed} outliers ({removed/len(series)*100:.1f}% of data)")
         
         return series[mask], mask
     
@@ -185,23 +182,6 @@ class DataProcessor:
         # Sort by date
         ts_data = ts_data.sort_values(date_col).reset_index(drop=True)
         
-        # st.success(f"✅ Aggregated to {len(ts_data)} time periods")
-        
-        with st.expander("Extracted Data Information"):
-            st.info(f"📅 Parsing dates from column: {date_col}")
-            
-            if found_date:
-                st.success(f"✅ Successfully parsed {len(df_copy)} dates")
-                st.info(f"📊 Date range: {min_date.strftime('%Y-%m-%d')} to {max_date.strftime('%Y-%m-%d')}")
-                st.success(f"✅ Aggregated to {len(ts_data)} time periods")
-            if agg_cols:
-                st.info(f"🔄 Aggregating by: {', '.join([date_col] + agg_cols)}")
-            else:
-                st.info(f"🔄 Aggregating by: {date_col}")
-
-        # Display sample of aggregated data
-        with st.expander("👀 Preview Aggregated Data"):
-            st.dataframe(ts_data.head(10), use_container_width=True)
         
         return ts_data
     
