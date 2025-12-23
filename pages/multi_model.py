@@ -552,6 +552,7 @@ def render(df):
                         
                         # Generate and display future forecast
                         with st.spinner(f"Generating forecast for {group_name}..."):
+                            # Generate future forecast
                             future_result = settings['factory'].train_and_predict(
                                 result['best_model_name'],
                                 result['full_data'],
@@ -561,9 +562,19 @@ def render(df):
                             if future_result:
                                 future_forecast = np.maximum(future_result['predictions'], 0)
                                 
+                                # Get fitted values - use test predictions
+                                test_predictions = result['best_model_result']['predictions']
+                                
+                                # Create fitted values that match historical length
+                                full_fitted = np.concatenate([
+                                    result['train_data'],     # Training portion = actual values
+                                    test_predictions          # Test portion = model predictions
+                                ])
+                                
+                                # Plot with fitted line that connects to forecast
                                 fig = viz.plot_forecast(
                                     result['full_data'],
-                                    None,
+                                    full_fitted,
                                     future_forecast,
                                     title=f"Forecast for {group_name}"
                                 )
@@ -637,9 +648,13 @@ def render(df):
                         if future_result:
                             future_forecast = np.maximum(future_result['predictions'], 0)
                             
+                            # For aggregated forecast, use actual values as fitted
+                            # (since we don't have individual model fits)
+                            fitted_values = aggregated_y.copy()
+                            
                             fig = viz.plot_forecast(
                                 aggregated_y,
-                                None,
+                                fitted_values,
                                 future_forecast,
                                 title=f"Overall Forecast (Aggregated)"
                             )
@@ -664,14 +679,41 @@ def render(df):
                     )
                     
                     if future_result:
-                        forecast_data = pd.DataFrame({
-                            'Period': range(1, settings['forecast_periods'] + 1),
-                            'Forecast': np.maximum(future_result['predictions'], 0),
-                            'Model': result['best_model_name']
-                        })
+                        # Parse group name to extract column values
+                        # e.g., "DC=VNH2, Product Name=Actrapid" -> {DC: VNH2, Product Name: Actrapid}
+                        group_dict = {}
+                        for part in group_name.split(', '):
+                            if '=' in part:
+                                col, val = part.split('=', 1)
+                                group_dict[col] = val
+                        
+                        # Create period numbers
+                        num_actual = len(result['full_data'])
+                        num_forecast = settings['forecast_periods']
+                        
+                        # Build the dataframe
+                        periods = list(range(1, num_actual + num_forecast + 1))
+                        
+                        # Create columns for group-by values
+                        data_dict = {'Period': periods}
+                        for col, val in group_dict.items():
+                            data_dict[col] = [val] * len(periods)
+                        
+                        # Create Actual column (with NaN for forecast periods)
+                        actual_values = list(result['full_data']) + [np.nan] * num_forecast
+                        data_dict['Actual'] = actual_values
+                        
+                        # Create Forecast column (with NaN for actual periods)
+                        forecast_values = [np.nan] * num_actual + list(np.maximum(future_result['predictions'], 0))
+                        data_dict['Forecast'] = forecast_values
+                        
+                        # Add model name
+                        data_dict['Model'] = [result['best_model_name']] * len(periods)
+                        
+                        forecast_data = pd.DataFrame(data_dict)
                         
                         # Clean sheet name (Excel limit: 31 chars)
-                        sheet_name = group_name[:31].replace('/', '-')
+                        sheet_name = group_name[:31].replace('/', '-').replace(':', '-')
                         forecast_data.to_excel(writer, sheet_name=sheet_name, index=False)
             
             st.download_button(
@@ -723,6 +765,13 @@ def render(df):
         best_name, best_result = sorted_models[0]
         
         with st.spinner(f'Generating forecast with {best_name}...'):
+            # Get fitted values
+            fitted_values = best_result['predictions']
+            full_fitted = np.concatenate([
+                results['train_data'],
+                fitted_values
+            ])
+            
             future_result = settings['factory'].train_and_predict(
                 best_name,
                 results['full_data'],
@@ -734,7 +783,7 @@ def render(df):
                 
                 fig = viz.plot_forecast(
                     results['full_data'],
-                    None,
+                    full_fitted,
                     future_forecast,
                     title=f"Future Forecast using {best_name}"
                 )
@@ -747,10 +796,22 @@ def render(df):
                     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
                         perf_df.to_excel(writer, sheet_name='Performance', index=False)
                         
+                        # Create combined actual + forecast dataframe
+                        num_actual = len(results['full_data'])
+                        num_forecast = settings['forecast_periods']
+                        periods = list(range(1, num_actual + num_forecast + 1))
+                        
+                        # Actual values (with NaN for forecast periods)
+                        actual_values = list(results['full_data']) + [np.nan] * num_forecast
+                        
+                        # Forecast values (with NaN for actual periods)
+                        forecast_values = [np.nan] * num_actual + list(future_forecast)
+                        
                         forecast_df = pd.DataFrame({
-                            'Period': range(1, settings['forecast_periods'] + 1),
-                            'Forecast': future_forecast,
-                            'Model': best_name
+                            'Period': periods,
+                            'Actual': actual_values,
+                            'Forecast': forecast_values,
+                            'Model': [best_name] * len(periods)
                         })
                         forecast_df.to_excel(writer, sheet_name='Forecast', index=False)
                     
