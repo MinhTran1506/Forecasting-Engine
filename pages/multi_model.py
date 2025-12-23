@@ -586,7 +586,7 @@ def render(df):
                     st.warning("⚠️ No groups match these filters. Try different combinations.")
             else:
                 # Show overall forecast (aggregated across all groups)
-                st.info("📊 **Viewing:** Overall/Aggregated forecast")
+                st.info("📊 **Viewing:** Overall/Aggregated forecast (Sum of matching groups)")
                 if selected_filters:
                     filter_summary = ', '.join([f"{k}={v}" for k, v in selected_filters.items()])
                     st.info(f"🔍 **Partial Filters:** {filter_summary}")
@@ -595,26 +595,21 @@ def render(df):
                 st.markdown("---")
                 
                 # Aggregate data from all matching groups
-                all_periods = []
-                all_values = []
+                # Collect data by period from all matching groups
+                period_data = {}
                 
                 for group_name in matching_groups:
                     result = group_results[group_name]
-                    all_values.extend(result['full_data'])
-                    all_periods.extend(range(len(result['full_data'])))
+                    for period_idx, value in enumerate(result['full_data']):
+                        if period_idx not in period_data:
+                            period_data[period_idx] = []
+                        period_data[period_idx].append(value)
                 
-                if all_values:
-                    # Aggregate by period (sum or average)
-                    period_data = {}
-                    for period, value in zip(all_periods, all_values):
-                        if period not in period_data:
-                            period_data[period] = []
-                        period_data[period].append(value)
+                if period_data:
+                    # Sum values for each period (appropriate for demand/quantity data)
+                    aggregated_y = np.array([np.sum(period_data[p]) for p in sorted(period_data.keys())])
                     
-                    # Average values for each period
-                    aggregated_y = np.array([np.mean(period_data[p]) for p in sorted(period_data.keys())])
-                    
-                    st.markdown(f"### 📈 Overall Forecast (Aggregated from {len(matching_groups)} groups)")
+                    st.markdown(f"### 📈 Overall Forecast (Sum of {len(matching_groups)} groups)")
                     
                     # Find best model from all group results (by average MAPE)
                     model_performance = {}
@@ -635,28 +630,46 @@ def render(df):
                     col1, col2, col3 = st.columns(3)
                     col1.metric("Best Model", best_overall_model.split('. ')[1])
                     col2.metric("Avg MAPE", f"{avg_mape:.2f}%")
-                    col3.metric("Groups Aggregated", len(matching_groups))
+                    col3.metric("Groups Summed", len(matching_groups))
                     
-                    # Generate overall forecast
+                    # Generate overall forecast with proper fitted values
                     with st.spinner(f"Generating overall forecast..."):
+                        # Split aggregated data for train/test to get fitted values
+                        test_size_agg = int(len(aggregated_y) * (1 - train_ratio / 100))
+                        test_size_agg = max(1, min(test_size_agg, len(aggregated_y) - min_periods))
+                        
+                        train_data_agg = aggregated_y[:-test_size_agg]
+                        test_data_agg = aggregated_y[-test_size_agg:]
+                        
+                        # Train on aggregated train data to get test predictions (fitted)
+                        test_result = settings['factory'].train_and_predict(
+                            best_overall_model,
+                            train_data_agg,
+                            len(test_data_agg)
+                        )
+                        
+                        # Generate future forecast on full aggregated data
                         future_result = settings['factory'].train_and_predict(
                             best_overall_model,
                             aggregated_y,
                             settings['forecast_periods']
                         )
                         
-                        if future_result:
+                        if future_result and test_result:
                             future_forecast = np.maximum(future_result['predictions'], 0)
                             
-                            # For aggregated forecast, use actual values as fitted
-                            # (since we don't have individual model fits)
-                            fitted_values = aggregated_y.copy()
+                            # Create fitted values: train portion = actual, test portion = predictions
+                            test_predictions = np.maximum(test_result['predictions'], 0)
+                            full_fitted = np.concatenate([
+                                train_data_agg,      # Training portion = actual
+                                test_predictions      # Test portion = model predictions
+                            ])
                             
                             fig = viz.plot_forecast(
                                 aggregated_y,
-                                fitted_values,
+                                full_fitted,
                                 future_forecast,
-                                title=f"Overall Forecast (Aggregated)"
+                                title=f"Overall Forecast (Sum of {len(matching_groups)} groups)"
                             )
                             st.plotly_chart(fig, use_container_width=True)
         else:
