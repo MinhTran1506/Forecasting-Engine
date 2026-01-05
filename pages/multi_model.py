@@ -37,6 +37,71 @@ def create_period_column(df, year_col, time_col):
     
     return df_sorted
 
+def aggregate_forecasts_from_groups(matching_groups, group_results, settings, train_ratio, min_periods):
+    """
+    Aggregate forecasts from individual group best-fit models instead of training a new model.
+    Uses stored future forecasts from training phase for consistency.
+    Returns: aggregated_y, aggregated_future_forecast, best_model_info
+    """
+    # Collect historical data by period from all matching groups
+    period_data = {}
+    for group_name in matching_groups:
+        result = group_results[group_name]
+        for period_idx, value in enumerate(result['full_data']):
+            if period_idx not in period_data:
+                period_data[period_idx] = []
+            period_data[period_idx].append(value)
+    
+    if not period_data:
+        return None, None, None
+    
+    # Sum values for each period
+    aggregated_y = np.array([np.sum(period_data[p]) for p in sorted(period_data.keys())])
+    
+    # Aggregate forecasts from each group's best-fit model (use stored forecasts)
+    forecast_by_period = {}
+    model_names_used = {}
+    group_forecasts = {}  # Store individual group forecasts for debugging
+    
+    for group_name in matching_groups:
+        result = group_results[group_name]
+        model_name = result['best_model_name']
+        
+        # Use the stored future forecast from training phase
+        future_forecast = result.get('future_forecast', np.array([]))
+        
+        if len(future_forecast) > 0:
+            group_forecasts[group_name] = future_forecast  # Store for reference
+            
+            # Track which models are being used
+            if model_name not in model_names_used:
+                model_names_used[model_name] = 0
+            model_names_used[model_name] += 1
+            
+            # Add to forecast aggregation
+            for period_idx, value in enumerate(future_forecast):
+                if period_idx not in forecast_by_period:
+                    forecast_by_period[period_idx] = []
+                forecast_by_period[period_idx].append(value)
+    
+    # Sum forecasts across groups
+    aggregated_future_forecast = np.array([
+        np.sum(forecast_by_period[p]) for p in sorted(forecast_by_period.keys())
+    ]) if forecast_by_period else np.array([])
+    
+    # Get best model info: model with highest frequency among groups
+    if model_names_used:
+        best_model = max(model_names_used.items(), key=lambda x: x[1])[0]
+    else:
+        best_model = "Aggregated Ensemble"
+    
+    return aggregated_y, aggregated_future_forecast, {
+        'model_name': best_model,
+        'models_used': model_names_used,
+        'num_groups': len(matching_groups),
+        'group_forecasts': group_forecasts
+    }
+
 def render(df):
     st.header("🎯 Multi-Model AI Comparison")
     st.markdown("**Train 17+ models for each group and let AI recommend the best one per group**")
@@ -336,14 +401,25 @@ def render(df):
                         if group_results:
                             # Find best model for this group
                             best_model = min(group_results.items(), key=lambda x: x[1]['metrics']['MAPE'])
+                            best_model_name = best_model[0]
+                            
+                            # Generate future forecast for best model using full data
+                            future_result = factory.train_and_predict(
+                                best_model_name,
+                                y,
+                                forecast_periods
+                            )
+                            future_forecast = np.maximum(future_result['predictions'], 0) if future_result else np.array([])
+                            
                             all_group_results[group_name] = {
-                                'best_model_name': best_model[0],
+                                'best_model_name': best_model_name,
                                 'best_model_result': best_model[1],
                                 'all_results': group_results,
                                 'train_data': train_data,
                                 'test_data': test_data,
                                 'full_data': y,
-                                'group_filter': group_row.to_dict()
+                                'group_filter': group_row.to_dict(),
+                                'future_forecast': future_forecast  # Store for aggregation
                             }
                         
                         progress_bar.progress((group_idx + 1) / total_iterations)
@@ -552,16 +628,10 @@ def render(df):
                         
                         # Generate and display future forecast
                         with st.spinner(f"Generating forecast for {group_name}..."):
-                            # Generate future forecast
-                            future_result = settings['factory'].train_and_predict(
-                                result['best_model_name'],
-                                result['full_data'],
-                                settings['forecast_periods']
-                            )
+                            # Use stored future forecast from training phase
+                            future_forecast = result.get('future_forecast', np.array([]))
                             
-                            if future_result:
-                                future_forecast = np.maximum(future_result['predictions'], 0)
-                                
+                            if len(future_forecast) > 0:
                                 # Get fitted values - use test predictions
                                 test_predictions = result['best_model_result']['predictions']
                                 
@@ -594,70 +664,78 @@ def render(df):
                 
                 st.markdown("---")
                 
-                # Aggregate data from all matching groups
-                # Collect data by period from all matching groups
-                period_data = {}
+                # Aggregate data from all matching groups and use their best-fit models
+                aggregated_y, aggregated_future_forecast, model_info = aggregate_forecasts_from_groups(
+                    matching_groups, group_results, settings, train_ratio, min_periods
+                )
                 
-                for group_name in matching_groups:
-                    result = group_results[group_name]
-                    for period_idx, value in enumerate(result['full_data']):
-                        if period_idx not in period_data:
-                            period_data[period_idx] = []
-                        period_data[period_idx].append(value)
-                
-                if period_data:
-                    # Sum values for each period (appropriate for demand/quantity data)
-                    aggregated_y = np.array([np.sum(period_data[p]) for p in sorted(period_data.keys())])
-                    
+                if aggregated_y is not None and len(aggregated_y) > 0:
                     st.markdown(f"### 📈 Overall Forecast (Sum of {len(matching_groups)} groups)")
                     
-                    # Find best model from all group results (by average MAPE)
-                    model_performance = {}
-                    for group_name in matching_groups:
-                        result = group_results[group_name]
-                        model_name = result['best_model_name']
-                        mape = result['best_model_result']['metrics']['MAPE']
-                        
-                        if model_name not in model_performance:
-                            model_performance[model_name] = []
-                        model_performance[model_name].append(mape)
-                    
-                    # Get model with best average performance
-                    best_overall_model = min(model_performance.items(), 
-                                            key=lambda x: np.mean(x[1]))[0]
-                    avg_mape = np.mean(model_performance[best_overall_model])
-                    
                     col1, col2, col3 = st.columns(3)
-                    col1.metric("Best Model", best_overall_model.split('. ')[1])
-                    col2.metric("Avg MAPE", f"{avg_mape:.2f}%")
-                    col3.metric("Groups Summed", len(matching_groups))
+                    col1.metric("Best Model Used", model_info['model_name'].split('. ')[1] if '. ' in model_info['model_name'] else model_info['model_name'])
+                    col2.metric("Groups Summed", len(matching_groups))
+                    col3.metric("Models Aggregated", len(model_info['models_used']))
                     
-                    # Generate overall forecast with proper fitted values
+                    # Show which models are being used
+                    # with st.expander("📋 Models used by each group"):
+                    #     models_text = "Models breakdown:\n"
+                    #     for model_name, count in sorted(model_info['models_used'].items(), key=lambda x: x[1], reverse=True):
+                    #         models_text += f"- {model_name}: {count} group(s)\n"
+                    #     st.text(models_text)
+                    
+                    # Debug: Show individual group forecasts and their sum
+                    # with st.expander("🔍 Debug: Individual group forecasts (Last forecast period)"):
+                    #     if 'group_forecasts' in model_info and model_info['group_forecasts']:
+                    #         # Get the last period index available
+                    #         first_forecast = next(iter(model_info['group_forecasts'].values()), None)
+                    #         if first_forecast is not None:
+                    #             last_period_idx = len(first_forecast) - 1
+                    #             last_period_num = settings['forecast_periods']
+                                
+                    #             st.write(f"**Showing last forecast period (Period {last_period_num} ahead):**")
+                    #             st.divider()
+                                
+                    #             for group_name, group_forecast in model_info['group_forecasts'].items():
+                    #                 if len(group_forecast) > 0:
+                    #                     value = group_forecast[last_period_idx]
+                    #                     value_str = f"{value:.6f}"
+                    #                     st.write(f"**{group_name}**: {value_str}")
+                                
+                    #             # Show the aggregated sum
+                    #             st.divider()
+                    #             agg_value = aggregated_future_forecast[last_period_idx]
+                    #             agg_value_str = f"{agg_value:.6f}"
+                    #             st.write(f"**Aggregated Sum (All groups):** {agg_value_str}")
+                                
+                    #             # Verify the sum
+                    #             individual_sum = sum([
+                    #                 model_info['group_forecasts'][gname][last_period_idx]
+                    #                 for gname in model_info['group_forecasts'].keys()
+                    #             ])
+                    #             st.write(f"**Manual Sum Verification:** {individual_sum:.6f}")
+                    #             if abs(individual_sum - agg_value) < 0.01:
+                    #                 st.success("✅ Sum matches perfectly!")
+                    #             else:
+                    #                 st.warning(f"⚠️ Difference: {abs(individual_sum - agg_value):.6f}")
+                    
+                    # Generate fitted values for aggregated data
+                    # Split aggregated data for train/test
+                    test_size_agg = int(len(aggregated_y) * (1 - train_ratio / 100))
+                    test_size_agg = max(1, min(test_size_agg, len(aggregated_y) - min_periods))
+                    
+                    train_data_agg = aggregated_y[:-test_size_agg]
+                    test_data_agg = aggregated_y[-test_size_agg:]
+                    
+                    # For fitted values, we approximate by training the best model on aggregated train data
                     with st.spinner(f"Generating overall forecast..."):
-                        # Split aggregated data for train/test to get fitted values
-                        test_size_agg = int(len(aggregated_y) * (1 - train_ratio / 100))
-                        test_size_agg = max(1, min(test_size_agg, len(aggregated_y) - min_periods))
-                        
-                        train_data_agg = aggregated_y[:-test_size_agg]
-                        test_data_agg = aggregated_y[-test_size_agg:]
-                        
-                        # Train on aggregated train data to get test predictions (fitted)
                         test_result = settings['factory'].train_and_predict(
-                            best_overall_model,
+                            model_info['model_name'],
                             train_data_agg,
                             len(test_data_agg)
                         )
                         
-                        # Generate future forecast on full aggregated data
-                        future_result = settings['factory'].train_and_predict(
-                            best_overall_model,
-                            aggregated_y,
-                            settings['forecast_periods']
-                        )
-                        
-                        if future_result and test_result:
-                            future_forecast = np.maximum(future_result['predictions'], 0)
-                            
+                        if test_result and len(aggregated_future_forecast) > 0:
                             # Create fitted values: train portion = actual, test portion = predictions
                             test_predictions = np.maximum(test_result['predictions'], 0)
                             full_fitted = np.concatenate([
@@ -668,7 +746,7 @@ def render(df):
                             fig = viz.plot_forecast(
                                 aggregated_y,
                                 full_fitted,
-                                future_forecast,
+                                aggregated_future_forecast,
                                 title=f"Overall Forecast (Sum of {len(matching_groups)} groups)"
                             )
                             st.plotly_chart(fig, use_container_width=True)
@@ -685,13 +763,10 @@ def render(df):
                 
                 # Individual group forecasts
                 for group_name, result in group_results.items():
-                    future_result = settings['factory'].train_and_predict(
-                        result['best_model_name'],
-                        result['full_data'],
-                        settings['forecast_periods']
-                    )
+                    # Use stored forecast from training phase
+                    future_forecast = result.get('future_forecast', np.array([]))
                     
-                    if future_result:
+                    if len(future_forecast) > 0:
                         # Parse group name to extract column values
                         # e.g., "DC=VNH2, Product Name=Actrapid" -> {DC: VNH2, Product Name: Actrapid}
                         group_dict = {}
@@ -717,7 +792,7 @@ def render(df):
                         data_dict['Actual'] = actual_values
                         
                         # Create Forecast column (with NaN for actual periods)
-                        forecast_values = [np.nan] * num_actual + list(np.maximum(future_result['predictions'], 0))
+                        forecast_values = [np.nan] * num_actual + list(future_forecast)
                         data_dict['Forecast'] = forecast_values
                         
                         # Add model name
