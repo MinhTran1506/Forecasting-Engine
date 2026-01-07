@@ -221,9 +221,9 @@ def render(df):
         
         with col1:
             remove_outliers = st.checkbox(
-                "Remove Outliers",
+                "Handle Outliers",
                 value=True,
-                help="Remove extreme values that may distort forecasts"
+                help="Handle extreme values that may distort forecasts"
             )
             
             if remove_outliers:

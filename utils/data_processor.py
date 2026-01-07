@@ -15,14 +15,23 @@ class DataProcessor:
         ]
 
     def remove_outliers(self, series, threshold=3.0):
-        """Remove outliers using z-score method"""
+        """Clip outliers to threshold boundaries instead of removing them.
+        Values beyond threshold standard deviations are capped/floored to the boundary.
+        """
         mean = np.mean(series)
         std = np.std(series)
-        z_scores = np.abs((series - mean) / std)
-        mask = z_scores < threshold
         
+        # Calculate boundaries
+        lower_bound = mean - threshold * std
+        upper_bound = mean + threshold * std
         
-        return series[mask], mask
+        # Clip values to boundaries (cap high outliers, floor low outliers)
+        clipped_series = np.clip(series, lower_bound, upper_bound)
+        
+        # Create mask indicating which values were modified
+        mask = series == clipped_series
+        
+        return clipped_series, mask
     
     def smooth_series(self, series, window=3):
         """Apply moving average smoothing"""
