@@ -190,7 +190,7 @@ def render(df):
             "📊 Train Ratio (%)",
             min_value=50,
             max_value=90,
-            value=70,
+            value=80,
             step=5,
             help="Percentage of data for training (rest for testing)"
         )
@@ -229,7 +229,7 @@ def render(df):
             if remove_outliers:
                 outlier_std = st.slider(
                     "Outlier Threshold (Std Dev)",
-                    1.5, 4.0, 3.0, 0.5,
+                    1.5, 4.0, 2.0, 0.5,
                     help="Values beyond this many standard deviations are removed"
                 )
         
