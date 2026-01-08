@@ -103,11 +103,11 @@ def aggregate_forecasts_from_groups(matching_groups, group_results, settings, tr
     }
 
 def render(df):
-    st.header("🎯 Multi-Model AI Comparison")
-    st.markdown("**Train 17+ models for each group and let AI recommend the best one per group**")
+    st.header("Best-Fit Forecast")
+    st.markdown("**Train 10+ models for each planning level and let the system recommend the one with best performance**")
     
     if df is None:
-        st.warning("⚠️ Please upload data to use Multi-Model Comparison")
+        st.warning("⚠️ Please upload data to use Best-Fit Forecast")
         return
     
     processor = DataProcessor()
@@ -154,8 +154,7 @@ def render(df):
         )
     
     # ========== STEP 2: GROUPING CONFIGURATION ==========
-    st.markdown("### 🎚️ Forecast Granularity (Group-wise Training)")
-    st.info("💡 **How it works:** Each model will be trained separately for each unique combination of groups. For example, if you select 'DC' and have 7 DCs with 10 models, the system will train 70 models total (10 models × 7 DCs) and select the best model for each DC.")
+    st.markdown("### 🎚️ Forecast Granularity")
     
     categorical_cols = df.select_dtypes(include=['object']).columns.tolist()
     # Exclude year and time columns from categorical
@@ -179,8 +178,8 @@ def render(df):
         forecast_periods = st.number_input(
             "🔮 Forecast Periods",
             min_value=1,
-            max_value=60,
-            value=12,
+            max_value=120,
+            value=24,
             step=1,
             help="Number of periods to forecast ahead"
         )
@@ -208,8 +207,8 @@ def render(df):
     with col4:
         min_periods = st.number_input(
             "⏰ Min Periods Required",
-            min_value=6,
-            max_value=24,
+            min_value=3,
+            max_value=240,
             value=12,
             step=1,
             help="Minimum data points required per group"
@@ -230,7 +229,7 @@ def render(df):
                 outlier_std = st.slider(
                     "Outlier Threshold (Std Dev)",
                     1.5, 4.0, 2.0, 0.5,
-                    help="Values beyond this many standard deviations are removed"
+                    help="Values beyond this standard deviation will be pulled back to the upper/lower limit value"
                 )
         
         with col2:
@@ -248,20 +247,20 @@ def render(df):
                 )
     
     # ========== STEP 5: MODEL SELECTION ==========
-    st.markdown("### 🎯 Model Selection")
+    st.markdown("### 🛠️ Models Factory")
     model_selection = st.radio(
         "Choose models to train:",
-        ["All Models (17)", "Fast Models Only (10)", "Best Performers (5)", "Custom Selection"],
+        ["All Models (17)", "Fast Models Only (10)", "Linh's Favorites ✨ (5)", "Custom Selection"],
         horizontal=True
     )
     
     if model_selection == "Custom Selection":
         available_models = [
-            "Simple Average", "Weighted Average", "Simple Moving Average",
+            "SARIMAX", "Gradient Boosting", "XGBoost", "Prophet", "Automated Exp Smoothing",
+            "Auto-ARIMA", "Simple Average", "Weighted Average", "Simple Moving Average",
             "Weighted Moving Average", "Linear Regression", "Seasonal Linear Regression",
             "Single Exp Smoothing", "Double Exp Smoothing", "Triple Exp Smoothing",
-            "Automated Exp Smoothing", "Adaptive Response Rate", "Browns Linear",
-            "Auto-ARIMA", "SARIMAX", "Gradient Boosting", "XGBoost-like", "Prophet"
+            "Adaptive Response Rate", "Browns Linear"
         ]
         selected_models = st.multiselect(
             "Select models:",
@@ -302,12 +301,12 @@ def render(df):
                 elif model_selection == "Fast Models Only (10)":
                     model_names = [m for m in factory.get_all_model_names()
                                  if not any(x in m for x in ['ARIMA', 'SARIMAX', 'Prophet', 'Gradient', 'XGBoost'])]
-                elif model_selection == "Best Performers (5)":
+                elif model_selection == "Linh's Favorites ✨ (5)":
                     model_names = [
-                        '5. Linear Regression',
-                        '6. Seasonal Linear Regression',
                         '10. Automated Exp Smoothing',
-                        '9. Triple Exponential Smoothing',
+                        '14. SARIMAX',
+                        '15. Gradient Boosting',
+                        '16. XGBoost-like (GB variant)',
                         '17. Prophet'
                     ]
                 else:  # Custom
@@ -327,7 +326,7 @@ def render(df):
                         'Auto-ARIMA': '13. Auto-ARIMA',
                         'SARIMAX': '14. SARIMAX',
                         'Gradient Boosting': '15. Gradient Boosting',
-                        'XGBoost-like': '16. XGBoost-like (GB variant)',
+                        'XGBoost': '16. XGBoost-like (GB variant)',
                         'Prophet': '17. Prophet'
                     }
                     model_names = [name_map[m] for m in selected_models if m in name_map]
@@ -551,7 +550,7 @@ def render(df):
                         available_filters[col].add(val)
             
             # Create filter UI with only available options
-            st.markdown("### 📊 Visualization Filters")
+            st.markdown("### 🔭 Visualization Filters")
             
             # Create columns for filters (max 4 per row)
             num_filters = len(available_filters)
@@ -608,9 +607,7 @@ def render(df):
             if all_filters_selected:
                 # Show specific group forecast
                 filter_summary = ', '.join([f"{k}={v}" for k, v in selected_filters.items()])
-                st.info(f"🔍 **Active Filters:** {filter_summary}")
-                st.info(f"📊 Showing: {len(matching_groups)} matching group(s)")
-                
+                st.info(f"🔍 **Active Filters:** {filter_summary}")          
                 st.markdown("---")
                 
                 if matching_groups:
@@ -660,8 +657,6 @@ def render(df):
                 if selected_filters:
                     filter_summary = ', '.join([f"{k}={v}" for k, v in selected_filters.items()])
                     st.info(f"🔍 **Partial Filters:** {filter_summary}")
-                st.info("👆 **Select all filter options to view specific group forecasts**")
-                
                 st.markdown("---")
                 
                 # Aggregate data from all matching groups and use their best-fit models
@@ -670,12 +665,11 @@ def render(df):
                 )
                 
                 if aggregated_y is not None and len(aggregated_y) > 0:
-                    st.markdown(f"### 📈 Overall Forecast (Sum of {len(matching_groups)} groups)")
+                    st.markdown(f"### 🔼 Overall Forecast (Sum of {len(matching_groups)} groups)")
                     
-                    col1, col2, col3 = st.columns(3)
-                    col1.metric("Best Model Used", model_info['model_name'].split('. ')[1] if '. ' in model_info['model_name'] else model_info['model_name'])
-                    col2.metric("Groups Summed", len(matching_groups))
-                    col3.metric("Models Aggregated", len(model_info['models_used']))
+                    col1, col2 = st.columns(2)
+                    col1.metric("Groups Summed", len(matching_groups))
+                    col2.metric("Models Aggregated", len(model_info['models_used']))
                     
                     # Show which models are being used
                     # with st.expander("📋 Models used by each group"):

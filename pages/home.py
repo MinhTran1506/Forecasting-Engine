@@ -13,7 +13,7 @@ def render(df):
         st.markdown("""
         ### 🎯 Advanced Multi-Model Forecasting Platform
         
-        Future1 Pro is an enterprise-grade forecasting application powered by state-of-the-art 
+        Future1 Pro is an forecasting application powered by state-of-the-art 
         machine learning algorithms. Make data-driven decisions with confidence.
         
         #### ✨ Key Features

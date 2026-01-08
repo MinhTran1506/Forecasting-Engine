@@ -61,7 +61,7 @@ else:
         </style>
     """, unsafe_allow_html=True)
     # Sidebar
-    st.sidebar.header("📊 Data Configuration")
+    st.sidebar.header("📋 Data Configuration")
     
     # File uploader
     uploaded_file = st.sidebar.file_uploader(
@@ -90,7 +90,7 @@ else:
         st.sidebar.info(f"📋 Columns: {len(df.columns)}")
     
     # Main tabs
-    tab_titles = ["🏠 Home", "🎯 Best-Fit Model", "🔮 Holt-Winters", "🤖 Prophet"]
+    tab_titles = ["🏠 Home", "🎯 Best-Fit Forecast", "🔮 Holt-Winters", "🤖 Prophet"]
     tabs = st.tabs(tab_titles)
     
     with tabs[0]:

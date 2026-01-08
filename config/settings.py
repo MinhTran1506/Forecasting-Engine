@@ -18,9 +18,9 @@ class Settings:
     ALLOWED_EXTENSIONS = ['csv', 'xlsx', 'xls']
     
     # Forecasting
-    MIN_DATA_POINTS = 12
-    MAX_FORECAST_PERIODS = 96
-    DEFAULT_FORECAST_PERIODS = 12
+    MIN_DATA_POINTS = 3
+    MAX_FORECAST_PERIODS = 120
+    DEFAULT_FORECAST_PERIODS = 24
     DEFAULT_CONFIDENCE_LEVEL = 95
     
     # Models
