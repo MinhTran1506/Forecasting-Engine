@@ -338,6 +338,7 @@ def render(df):
                     st.info(f"🔄 Training {len(model_names)} models for {len(group_combinations)} groups = {len(model_names) * len(group_combinations)} total models")
                     
                     all_group_results = {}
+                    skipped_groups = []  # Track skipped groups
                     progress_bar = st.progress(0)
                     status_text = st.empty()
                     
@@ -357,7 +358,11 @@ def render(df):
                         
                         # Check minimum periods
                         if len(group_data) < min_periods:
-                            st.warning(f"⚠️ Skipping {group_name}: only {len(group_data)} periods (minimum: {min_periods})")
+                            skipped_groups.append({
+                                'group': group_name,
+                                'periods': len(group_data),
+                                'required': min_periods
+                            })
                             continue
                         
                         status_text.text(f"Training models for: {group_name} ({group_idx + 1}/{total_iterations})")
@@ -425,6 +430,14 @@ def render(df):
                     
                     progress_bar.empty()
                     status_text.empty()
+                    
+                    # Display skipped groups in an expander if any
+                    if skipped_groups:
+                        with st.expander(f"⚠️ Skipped Groups ({len(skipped_groups)})"):
+                            st.warning(f"The following {len(skipped_groups)} group(s) were skipped due to insufficient data:")
+                            skipped_df = pd.DataFrame(skipped_groups)
+                            skipped_df.columns = ['Group', 'Available Periods', 'Required Periods']
+                            st.dataframe(skipped_df, use_container_width=True, hide_index=True)
                     
                     # Store results
                     st.session_state.group_results = all_group_results
@@ -607,7 +620,8 @@ def render(df):
             if all_filters_selected:
                 # Show specific group forecast
                 filter_summary = ', '.join([f"{k}={v}" for k, v in selected_filters.items()])
-                st.info(f"🔍 **Active Filters:** {filter_summary}")          
+                st.info(f"🔍 **Active Filters:** {filter_summary}")
+                
                 st.markdown("---")
                 
                 if matching_groups:
@@ -657,6 +671,7 @@ def render(df):
                 if selected_filters:
                     filter_summary = ', '.join([f"{k}={v}" for k, v in selected_filters.items()])
                     st.info(f"🔍 **Partial Filters:** {filter_summary}")
+                
                 st.markdown("---")
                 
                 # Aggregate data from all matching groups and use their best-fit models
