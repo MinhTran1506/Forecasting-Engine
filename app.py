@@ -13,8 +13,8 @@ warnings.filterwarnings('ignore')
 
 # Page configuration
 st.set_page_config(
-    page_title="Future1 Pro",
-    page_icon="🔮",
+    page_title="Future1",
+    page_icon="icon.png",
     layout="wide",
     initial_sidebar_state="expanded"
 )
