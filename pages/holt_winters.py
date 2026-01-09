@@ -42,20 +42,30 @@ def render(df):
         st.error(f"Error optimizing parameters: {e}")
         return
     
-    # Sidebar controls
-    st.sidebar.markdown("### 🎛️ Model Parameters")
+    # Model Parameters in main content area
+    st.markdown("### 🎛️ Model Parameters")
+    
+    col1, col2, col3, col4 = st.columns(4)
     
     def reset_value():
         st.session_state.alpha = opt_alpha
         st.session_state.beta = opt_beta
         st.session_state.gamma = opt_gamma
     
-    alpha = st.sidebar.slider('Alpha (Level)', 0.0, 1.0, opt_alpha, 0.01, key="alpha")
-    beta = st.sidebar.slider('Beta (Trend)', 0.0, 1.0, opt_beta, 0.01, key="beta")
-    gamma = st.sidebar.slider('Gamma (Seasonal)', 0.0, 1.0, opt_gamma, 0.01, key="gamma")
-    periods = st.sidebar.slider('Forecast Periods', 1, 96, 36, 1, key="periods")
+    with col1:
+        alpha = st.slider('Alpha (Level)', 0.0, 1.0, opt_alpha, 0.01, key="alpha")
+    with col2:
+        beta = st.slider('Beta (Trend)', 0.0, 1.0, opt_beta, 0.01, key="beta")
+    with col3:
+        gamma = st.slider('Gamma (Seasonal)', 0.0, 1.0, opt_gamma, 0.01, key="gamma")
+    with col4:
+        periods = st.slider('Forecast Periods', 1, 96, 36, 1, key="periods")
     
-    st.sidebar.button("Reset to Optimized", on_click=reset_value)
+    if st.button("Reset to Optimized", key="reset_hw"):
+        reset_value()
+        st.rerun()
+    
+    st.markdown("---")
     
     # Display parameters
     col1, col2, col3, col4 = st.columns(4)

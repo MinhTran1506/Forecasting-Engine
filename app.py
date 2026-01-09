@@ -90,7 +90,7 @@ else:
         st.sidebar.info(f"📋 Columns: {len(df.columns)}")
     
     # Main tabs
-    tab_titles = ["🏠 Home", "🎯 Best-Fit Forecast", "🔮 Holt-Winters", "🤖 Prophet"]
+    tab_titles = ["🏠 Home", "🎯 Best-Fit Forecast", "🔮 Holt-Winters", "🧙‍♂️ Prophet"]
     tabs = st.tabs(tab_titles)
     
     with tabs[0]:

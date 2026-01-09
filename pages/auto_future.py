@@ -11,7 +11,7 @@ import plotly.graph_objects as go
 import io
 
 def render(df):
-    st.header("🤖 Auto-Future (Prophet)")
+    st.header("🧙‍♂️ Auto-Future (Prophet)")
     
     if df is None or 'Vol' not in df.columns:
         st.warning("⚠️ Please upload data with 'Vol' column")
@@ -31,22 +31,27 @@ def render(df):
     prophet_df['ds'] = pd.date_range(start, end, freq='MS')
     prophet_df = prophet_df[['ds', 'y']]
     
-    # Sidebar configuration
-    st.sidebar.markdown("### ⚙️ Prophet Configuration")
-    forecast_periods = st.sidebar.slider('Forecast Periods', 1, 60, 36, 1)
-    yearly_seasonality = st.sidebar.checkbox('Yearly Seasonality', value=True)
-    weekly_seasonality = st.sidebar.checkbox('Weekly Seasonality', value=False)
-    daily_seasonality = st.sidebar.checkbox('Daily Seasonality', value=False)
+    # Configuration in main content area
+    st.markdown("### ⚙️ Prophet Configuration")
     
-    changepoint_prior_scale = st.sidebar.slider(
-        'Trend Flexibility', 0.001, 0.5, 0.05, 0.001,
-        help="Higher values = more flexible trend"
-    )
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        forecast_periods = st.slider('Forecast Periods', 1, 60, 36, 1)
+        changepoint_prior_scale = st.slider(
+            'Trend Flexibility', 0.001, 0.5, 0.05, 0.001,
+            help="Higher values = more flexible trend"
+        )
+    with col2:
+        seasonality_prior_scale = st.slider(
+            'Seasonality Strength', 0.01, 10.0, 10.0, 0.1,
+            help="Higher values = stronger seasonality"
+        )
+    with col3:
+        yearly_seasonality = st.checkbox('Yearly Seasonality', value=True)
+        weekly_seasonality = st.checkbox('Weekly Seasonality', value=False)
+        daily_seasonality = st.checkbox('Daily Seasonality', value=False)
     
-    seasonality_prior_scale = st.sidebar.slider(
-        'Seasonality Strength', 0.01, 10.0, 10.0, 0.1,
-        help="Higher values = stronger seasonality"
-    )
+    st.markdown("---")
     
     # Train model
     with st.spinner('Training Prophet model...'):
