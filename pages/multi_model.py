@@ -17,6 +17,66 @@ from utils.visualizer import Visualizer
 from models.all_models import ModelFactory
 import io
 
+def safe_time_to_str(time_value):
+    """
+    Convert time value to string, handling both numeric and text (month names)
+    """
+    # Month name to number mapping
+    month_map = {
+        'jan': '01', 'january': '01',
+        'feb': '02', 'february': '02',
+        'mar': '03', 'march': '03',
+        'apr': '04', 'april': '04',
+        'may': '05',
+        'jun': '06', 'june': '06',
+        'jul': '07', 'july': '07',
+        'aug': '08', 'august': '08',
+        'sep': '09', 'september': '09',
+        'oct': '10', 'october': '10',
+        'nov': '11', 'november': '11',
+        'dec': '12', 'december': '12'
+    }
+    
+    # Try to convert to int first (for numeric weeks/months)
+    try:
+        return str(int(time_value))
+    except (ValueError, TypeError):
+        # If it's a string (month name), convert it
+        if isinstance(time_value, str):
+            time_lower = time_value.lower().strip()
+            return month_map.get(time_lower, time_value)
+        return str(time_value)
+
+def safe_time_to_int(time_value):
+    """
+    Convert time value to integer, handling both numeric and text (month names)
+    """
+    # Month name to number mapping
+    month_map = {
+        'jan': 1, 'january': 1,
+        'feb': 2, 'february': 2,
+        'mar': 3, 'march': 3,
+        'apr': 4, 'april': 4,
+        'may': 5,
+        'jun': 6, 'june': 6,
+        'jul': 7, 'july': 7,
+        'aug': 8, 'august': 8,
+        'sep': 9, 'september': 9,
+        'oct': 10, 'october': 10,
+        'nov': 11, 'november': 11,
+        'dec': 12, 'december': 12
+    }
+    
+    # Try to convert to int first (for numeric weeks/months)
+    try:
+        return int(time_value)
+    except (ValueError, TypeError):
+        # If it's a string (month name), convert it
+        if isinstance(time_value, str):
+            time_lower = time_value.lower().strip()
+            return month_map.get(time_lower, 0)
+        return 0
+
 def create_period_column(df, year_col, time_col, group_cols=None):
     """
     Create sequential period column from Year + Week/Month
@@ -696,7 +756,8 @@ def render(df):
                                         period_to_date = {}
                                         for _, row in unique_periods.iterrows():
                                             period = int(row['Period'])
-                                            period_to_date[period] = f"{int(row[year_col])}/{int(row[time_col])}"
+                                            time_str = safe_time_to_str(row[time_col])
+                                            period_to_date[period] = f"{int(row[year_col])}/{time_str}"
                                         
                                         # Build date labels for actual + forecast
                                         date_labels = []
@@ -705,12 +766,15 @@ def render(df):
                                         
                                         # Get last date for forecast extrapolation
                                         last_year = int(unique_periods.iloc[-1][year_col])
-                                        last_time = int(unique_periods.iloc[-1][time_col])
+                                        last_time = safe_time_to_int(unique_periods.iloc[-1][time_col])
                                         
                                         # Add actual dates
                                         for period in range(1, num_actual + 1):
                                             if period in period_to_date:
                                                 date_labels.append(period_to_date[period])
+                                            else:
+                                                # Fallback if period not in mapping
+                                                date_labels.append(f"Period {period}")
                                         
                                         # Add forecast dates
                                         if 'week' in time_col.lower():
@@ -852,7 +916,8 @@ def render(df):
                                     period_to_date = {}
                                     for _, row in unique_periods.iterrows():
                                         period = int(row['Period'])
-                                        period_to_date[period] = f"{int(row[year_col])}/{int(row[time_col])}"
+                                        time_str = safe_time_to_str(row[time_col])
+                                        period_to_date[period] = f"{int(row[year_col])}/{time_str}"
                                     
                                     # Build date labels for actual + forecast
                                     date_labels = []
@@ -861,12 +926,15 @@ def render(df):
                                     
                                     # Get last date for forecast extrapolation
                                     last_year = int(unique_periods.iloc[-1][year_col])
-                                    last_time = int(unique_periods.iloc[-1][time_col])
+                                    last_time = safe_time_to_int(unique_periods.iloc[-1][time_col])
                                     
                                     # Add actual dates
                                     for period in range(1, num_actual + 1):
                                         if period in period_to_date:
                                             date_labels.append(period_to_date[period])
+                                        else:
+                                            # Fallback if period not in mapping
+                                            date_labels.append(f"Period {period}")
                                     
                                     # Add forecast dates
                                     if 'week' in time_col.lower():
@@ -932,7 +1000,7 @@ def render(df):
                         for _, row in unique_periods.iterrows():
                             period_to_date[int(row['Period'])] = {
                                 'Year': int(row[year_col]),
-                                'Time': int(row[time_col])
+                                'Time': safe_time_to_str(row[time_col])
                             }
                 
                 # Get dimensions
@@ -949,7 +1017,12 @@ def render(df):
                 if period_to_date:
                     last_period = max(period_to_date.keys())
                     last_year = period_to_date[last_period]['Year']
-                    last_time = period_to_date[last_period]['Time']
+                    last_time_str = period_to_date[last_period]['Time']
+                    # Convert back to int for arithmetic
+                    try:
+                        last_time = int(last_time_str)
+                    except ValueError:
+                        last_time = 1  # Fallback
                 
                 # Create data rows
                 for i in range(total_periods):
@@ -1001,8 +1074,12 @@ def render(df):
         # Create single dataframe
         combined_df = pd.DataFrame(all_data)
         
-        # Write to Excel (single sheet)
+        # Write to Excel with Summary and Forecasts sheets
         with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+            # Write Summary sheet
+            summary_df.to_excel(writer, sheet_name='Summary', index=False)
+            
+            # Write Forecasts sheet
             combined_df.to_excel(writer, sheet_name='Forecasts', index=False)
         
         st.download_button(
@@ -1083,7 +1160,8 @@ def render(df):
                     period_to_date = {}
                     for _, row in unique_periods.iterrows():
                         period = int(row['Period'])
-                        period_to_date[period] = f"{int(row[year_col])}/{int(row[time_col])}"
+                        time_str = safe_time_to_str(row[time_col])
+                        period_to_date[period] = f"{int(row[year_col])}/{time_str}"
                     
                     # Build date labels for actual + forecast
                     date_labels = []
@@ -1092,12 +1170,15 @@ def render(df):
                     
                     # Get last date for forecast extrapolation
                     last_year = int(unique_periods.iloc[-1][year_col])
-                    last_time = int(unique_periods.iloc[-1][time_col])
+                    last_time = safe_time_to_int(unique_periods.iloc[-1][time_col])
                     
                     # Add actual dates
                     for period in range(1, num_actual + 1):
                         if period in period_to_date:
                             date_labels.append(period_to_date[period])
+                        else:
+                            # Fallback if period not in mapping
+                            date_labels.append(f"Period {period}")
                     
                     # Add forecast dates
                     if 'week' in time_col.lower():
@@ -1137,7 +1218,7 @@ def render(df):
                     for _, row in unique_periods.iterrows():
                         period_to_date[int(row['Period'])] = {
                             'Year': int(row[year_col]),
-                            'Time': int(row[time_col])
+                            'Time': safe_time_to_str(row[time_col])
                         }
                 
                 # Create combined actual + forecast dataframe
@@ -1154,7 +1235,12 @@ def render(df):
                 if period_to_date:
                     last_period = max(period_to_date.keys())
                     last_year = period_to_date[last_period]['Year']
-                    last_time = period_to_date[last_period]['Time']
+                    last_time_str = period_to_date[last_period]['Time']
+                    # Convert back to int for arithmetic
+                    try:
+                        last_time = int(last_time_str)
+                    except ValueError:
+                        last_time = 1  # Fallback
                 
                 all_data = []
                 
