@@ -17,23 +17,40 @@ from utils.visualizer import Visualizer
 from models.all_models import ModelFactory
 import io
 
-def create_period_column(df, year_col, time_col):
+def create_period_column(df, year_col, time_col, group_cols=None):
     """
     Create sequential period column from Year + Week/Month
     Example: Year=[2024,2024,2025,2025], Week=[1,2,1,2] -> Period=[1,2,3,4]
+    If group_cols provided, creates periods within each group separately
     """
     df_sorted = df.sort_values([year_col, time_col]).copy()
     
-    # Create unique year-time combinations
-    df_sorted['_temp_year_time'] = df_sorted[year_col].astype(str) + '_' + df_sorted[time_col].astype(str)
-    
-    # Get unique periods in order
-    unique_periods = df_sorted['_temp_year_time'].unique()
-    period_map = {period: idx + 1 for idx, period in enumerate(unique_periods)}
-    
-    # Map to sequential periods
-    df_sorted['Period'] = df_sorted['_temp_year_time'].map(period_map)
-    df_sorted = df_sorted.drop('_temp_year_time', axis=1)
+    if group_cols and len(group_cols) > 0:
+        # Create periods within each group
+        # Sort by groups first, then by year and time
+        df_sorted = df.sort_values(group_cols + [year_col, time_col]).copy()
+        
+        # Create year-time combinations
+        df_sorted['_temp_year_time'] = df_sorted[year_col].astype(str) + '_' + df_sorted[time_col].astype(str)
+        
+        # Create sequential periods within each group
+        def assign_periods(group):
+            unique_periods = group['_temp_year_time'].unique()
+            period_map = {period: idx + 1 for idx, period in enumerate(unique_periods)}
+            group['Period'] = group['_temp_year_time'].map(period_map)
+            return group
+        
+        df_sorted = df_sorted.groupby(group_cols, group_keys=False).apply(assign_periods)
+        df_sorted = df_sorted.drop('_temp_year_time', axis=1)
+    else:
+        # Create global periods
+        df_sorted['_temp_year_time'] = df_sorted[year_col].astype(str) + '_' + df_sorted[time_col].astype(str)
+        
+        unique_periods = df_sorted['_temp_year_time'].unique()
+        period_map = {period: idx + 1 for idx, period in enumerate(unique_periods)}
+        
+        df_sorted['Period'] = df_sorted['_temp_year_time'].map(period_map)
+        df_sorted = df_sorted.drop('_temp_year_time', axis=1)
     
     return df_sorted
 
@@ -273,7 +290,7 @@ def render(df):
         with st.spinner('🔄 Processing data and training models...'):
             try:
                 # Create Period column
-                df_processed = create_period_column(df.copy(), year_col, time_col)
+                df_processed = create_period_column(df.copy(), year_col, time_col, group_cols)
                 
                 # Filter negative values
                 original_len = len(df_processed)
@@ -446,7 +463,10 @@ def render(df):
                         'group_cols': group_cols,
                         'value_col': value_col,
                         'factory': factory,
-                        'agg_df': agg_df
+                        'agg_df': agg_df,
+                        'df_processed': df_processed,
+                        'year_col': year_col,
+                        'time_col': time_col
                     }
                     
                 else:
@@ -509,7 +529,10 @@ def render(df):
                         'forecast_periods': forecast_periods,
                         'value_col': value_col,
                         'factory': factory,
-                        'agg_df': agg_df
+                        'agg_df': agg_df,
+                        'df_processed': df_processed,
+                        'year_col': year_col,
+                        'time_col': time_col
                     }
                 
             except Exception as e:
@@ -652,12 +675,64 @@ def render(df):
                                     test_predictions          # Test portion = model predictions
                                 ])
                                 
+                                # Generate date labels for x-axis
+                                df_processed = settings.get('df_processed')
+                                year_col = settings.get('year_col')
+                                time_col = settings.get('time_col')
+                                date_labels = None
+                                
+                                if df_processed is not None and year_col and time_col:
+                                    # Filter df_processed for this specific group
+                                    group_dict = result.get('group_filter', {})
+                                    group_filter = pd.Series([True] * len(df_processed))
+                                    for col, val in group_dict.items():
+                                        if col in df_processed.columns:
+                                            group_filter = group_filter & (df_processed[col] == val)
+                                    
+                                    group_df = df_processed[group_filter]
+                                    if not group_df.empty:
+                                        # Get unique Period -> Date mapping for this group
+                                        unique_periods = group_df[['Period', year_col, time_col]].drop_duplicates().sort_values('Period')
+                                        period_to_date = {}
+                                        for _, row in unique_periods.iterrows():
+                                            period = int(row['Period'])
+                                            period_to_date[period] = f"{int(row[year_col])}/{int(row[time_col])}"
+                                        
+                                        # Build date labels for actual + forecast
+                                        date_labels = []
+                                        num_actual = len(result['full_data'])
+                                        num_forecast = len(future_forecast)
+                                        
+                                        # Get last date for forecast extrapolation
+                                        last_year = int(unique_periods.iloc[-1][year_col])
+                                        last_time = int(unique_periods.iloc[-1][time_col])
+                                        
+                                        # Add actual dates
+                                        for period in range(1, num_actual + 1):
+                                            if period in period_to_date:
+                                                date_labels.append(period_to_date[period])
+                                        
+                                        # Add forecast dates
+                                        if 'week' in time_col.lower():
+                                            max_time = 52
+                                        else:
+                                            max_time = 12
+                                        
+                                        for i in range(1, num_forecast + 1):
+                                            forecast_time = last_time + i
+                                            forecast_year = last_year
+                                            while forecast_time > max_time:
+                                                forecast_time -= max_time
+                                                forecast_year += 1
+                                            date_labels.append(f"{forecast_year}/{forecast_time}")
+                                
                                 # Plot with fitted line that connects to forecast
                                 fig = viz.plot_forecast(
                                     result['full_data'],
                                     full_fitted,
                                     future_forecast,
-                                    title=f"Forecast for {group_name}"
+                                    title=f"Forecast for {group_name}",
+                                    date_labels=date_labels
                                 )
                                 st.plotly_chart(fig, use_container_width=True)
                         
@@ -752,73 +827,191 @@ def render(df):
                                 test_predictions      # Test portion = model predictions
                             ])
                             
+                            # Generate date labels for x-axis
+                            # For aggregated view, we can use any group's dates since all groups share same periods
+                            df_processed = settings.get('df_processed')
+                            year_col = settings.get('year_col')
+                            time_col = settings.get('time_col')
+                            date_labels = None
+                            
+                            if df_processed is not None and year_col and time_col and matching_groups:
+                                # Use first matching group to get date mapping
+                                first_group_name = matching_groups[0]
+                                first_result = group_results[first_group_name]
+                                group_dict = first_result.get('group_filter', {})
+                                
+                                group_filter = pd.Series([True] * len(df_processed))
+                                for col, val in group_dict.items():
+                                    if col in df_processed.columns:
+                                        group_filter = group_filter & (df_processed[col] == val)
+                                
+                                group_df = df_processed[group_filter]
+                                if not group_df.empty:
+                                    # Get unique Period -> Date mapping
+                                    unique_periods = group_df[['Period', year_col, time_col]].drop_duplicates().sort_values('Period')
+                                    period_to_date = {}
+                                    for _, row in unique_periods.iterrows():
+                                        period = int(row['Period'])
+                                        period_to_date[period] = f"{int(row[year_col])}/{int(row[time_col])}"
+                                    
+                                    # Build date labels for actual + forecast
+                                    date_labels = []
+                                    num_actual = len(aggregated_y)
+                                    num_forecast = len(aggregated_future_forecast)
+                                    
+                                    # Get last date for forecast extrapolation
+                                    last_year = int(unique_periods.iloc[-1][year_col])
+                                    last_time = int(unique_periods.iloc[-1][time_col])
+                                    
+                                    # Add actual dates
+                                    for period in range(1, num_actual + 1):
+                                        if period in period_to_date:
+                                            date_labels.append(period_to_date[period])
+                                    
+                                    # Add forecast dates
+                                    if 'week' in time_col.lower():
+                                        max_time = 52
+                                    else:
+                                        max_time = 12
+                                    
+                                    for i in range(1, num_forecast + 1):
+                                        forecast_time = last_time + i
+                                        forecast_year = last_year
+                                        while forecast_time > max_time:
+                                            forecast_time -= max_time
+                                            forecast_year += 1
+                                        date_labels.append(f"{forecast_year}/{forecast_time}")
+                            
                             fig = viz.plot_forecast(
                                 aggregated_y,
                                 full_fitted,
                                 aggregated_future_forecast,
-                                title=f"Overall Forecast (Sum of {len(matching_groups)} groups)"
+                                title=f"Overall Forecast (Sum of {len(matching_groups)} groups)",
+                                date_labels=date_labels
                             )
                             st.plotly_chart(fig, use_container_width=True)
         else:
             st.info("💡 No group filters available. Select grouping columns during configuration to enable filtering.")
         
         # Download all results
-        if st.button("📥 Download All Group Forecasts", type="primary"):
-            output = io.BytesIO()
+        output = io.BytesIO()
+        
+        # Create period-to-date mapping from df_processed for each group
+        df_processed = settings.get('df_processed')
+        year_col = settings.get('year_col')
+        time_col = settings.get('time_col')
+        group_cols = settings.get('group_cols', [])
+        
+        # Collect all data into single dataframe
+        all_data = []
+        
+        for group_name, result in group_results.items():
+            # Use stored forecast from training phase
+            future_forecast = result.get('future_forecast', np.array([]))
             
-            with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-                # Summary sheet
-                summary_df.to_excel(writer, sheet_name='Summary', index=False)
+            if len(future_forecast) > 0:
+                # Parse group name to extract column values
+                group_dict = {}
+                for part in group_name.split(', '):
+                    if '=' in part:
+                        col, val = part.split('=', 1)
+                        group_dict[col] = val
                 
-                # Individual group forecasts
-                for group_name, result in group_results.items():
-                    # Use stored forecast from training phase
-                    future_forecast = result.get('future_forecast', np.array([]))
+                # Filter df_processed for this specific group
+                period_to_date = {}
+                if df_processed is not None and year_col and time_col:
+                    group_filter = pd.Series([True] * len(df_processed))
+                    for col, val in group_dict.items():
+                        if col in df_processed.columns:
+                            group_filter = group_filter & (df_processed[col] == val)
                     
-                    if len(future_forecast) > 0:
-                        # Parse group name to extract column values
-                        # e.g., "DC=VNH2, Product Name=Actrapid" -> {DC: VNH2, Product Name: Actrapid}
-                        group_dict = {}
-                        for part in group_name.split(', '):
-                            if '=' in part:
-                                col, val = part.split('=', 1)
-                                group_dict[col] = val
+                    group_df = df_processed[group_filter]
+                    if not group_df.empty:
+                        # Get unique Period -> Year, Week/Month mapping for this group
+                        unique_periods = group_df[['Period', year_col, time_col]].drop_duplicates().sort_values('Period')
+                        for _, row in unique_periods.iterrows():
+                            period_to_date[int(row['Period'])] = {
+                                'Year': int(row[year_col]),
+                                'Time': int(row[time_col])
+                            }
+                
+                # Get dimensions
+                num_actual = len(result['full_data'])
+                num_forecast = settings['forecast_periods']
+                total_periods = num_actual + num_forecast
+                
+                # Combine actual and forecast into single Quantity column
+                quantities = list(result['full_data']) + list(future_forecast)
+                
+                # Get last actual date for forecast extrapolation
+                last_year = None
+                last_time = None
+                if period_to_date:
+                    last_period = max(period_to_date.keys())
+                    last_year = period_to_date[last_period]['Year']
+                    last_time = period_to_date[last_period]['Time']
+                
+                # Create data rows
+                for i in range(total_periods):
+                    row_data = {}
+                    period = i + 1
+                    qty = quantities[i]
+                    
+                    # Create Date column (Year/Week or Year/Month format)
+                    if period in period_to_date:
+                        # Actual period - use mapping
+                        year = period_to_date[period]['Year']
+                        time = period_to_date[period]['Time']
+                        row_data['Date'] = f"{year}/{time}"
+                    elif last_year is not None and last_time is not None:
+                        # Forecast period - extrapolate from last actual
+                        periods_ahead = period - num_actual
+                        forecast_time = last_time + periods_ahead
+                        forecast_year = last_year
                         
-                        # Create period numbers
-                        num_actual = len(result['full_data'])
-                        num_forecast = settings['forecast_periods']
+                        # Handle week/month overflow (assuming max 52 weeks or 12 months)
+                        if 'week' in time_col.lower():
+                            max_time = 52
+                        else:
+                            max_time = 12
                         
-                        # Build the dataframe
-                        periods = list(range(1, num_actual + num_forecast + 1))
+                        while forecast_time > max_time:
+                            forecast_time -= max_time
+                            forecast_year += 1
                         
-                        # Create columns for group-by values
-                        data_dict = {'Period': periods}
-                        for col, val in group_dict.items():
-                            data_dict[col] = [val] * len(periods)
-                        
-                        # Create Actual column (with NaN for forecast periods)
-                        actual_values = list(result['full_data']) + [np.nan] * num_forecast
-                        data_dict['Actual'] = actual_values
-                        
-                        # Create Forecast column (with NaN for actual periods)
-                        forecast_values = [np.nan] * num_actual + list(future_forecast)
-                        data_dict['Forecast'] = forecast_values
-                        
-                        # Add model name
-                        data_dict['Model'] = [result['best_model_name']] * len(periods)
-                        
-                        forecast_data = pd.DataFrame(data_dict)
-                        
-                        # Clean sheet name (Excel limit: 31 chars)
-                        sheet_name = group_name[:31].replace('/', '-').replace(':', '-')
-                        forecast_data.to_excel(writer, sheet_name=sheet_name, index=False)
-            
-            st.download_button(
-                label='📥 Download Complete Analysis',
-                data=output.getvalue(),
-                file_name='group_wise_forecasts.xlsx',
-                mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-            )
+                        row_data['Date'] = f"{forecast_year}/{forecast_time}"
+                    else:
+                        row_data['Date'] = ''
+                    
+                    # Add group-by columns
+                    for col, val in group_dict.items():
+                        row_data[col] = val
+                    
+                    # Add quantity
+                    row_data['Quantity'] = qty
+                    
+                    # Add type indicator
+                    row_data['Type'] = 'Actual' if i < num_actual else 'Forecast'
+                    
+                    # Add model name
+                    row_data['Model'] = result['best_model_name']
+                    
+                    all_data.append(row_data)
+        
+        # Create single dataframe
+        combined_df = pd.DataFrame(all_data)
+        
+        # Write to Excel (single sheet)
+        with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+            combined_df.to_excel(writer, sheet_name='Forecasts', index=False)
+        
+        st.download_button(
+            label='📥 Download All Group Forecasts',
+            data=output.getvalue(),
+            file_name='group_wise_forecasts.xlsx',
+            mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            type="primary"
+        )
     
     # Overall results
     elif 'overall_results' in st.session_state:
@@ -878,43 +1071,145 @@ def render(df):
             if future_result:
                 future_forecast = np.maximum(future_result['predictions'], 0)
                 
+                # Generate date labels for x-axis
+                df_processed = settings.get('df_processed')
+                year_col = settings.get('year_col')
+                time_col = settings.get('time_col')
+                date_labels = None
+                
+                if df_processed is not None and year_col and time_col:
+                    # Get unique Period -> Date mapping
+                    unique_periods = df_processed[['Period', year_col, time_col]].drop_duplicates().sort_values('Period')
+                    period_to_date = {}
+                    for _, row in unique_periods.iterrows():
+                        period = int(row['Period'])
+                        period_to_date[period] = f"{int(row[year_col])}/{int(row[time_col])}"
+                    
+                    # Build date labels for actual + forecast
+                    date_labels = []
+                    num_actual = len(results['full_data'])
+                    num_forecast = len(future_forecast)
+                    
+                    # Get last date for forecast extrapolation
+                    last_year = int(unique_periods.iloc[-1][year_col])
+                    last_time = int(unique_periods.iloc[-1][time_col])
+                    
+                    # Add actual dates
+                    for period in range(1, num_actual + 1):
+                        if period in period_to_date:
+                            date_labels.append(period_to_date[period])
+                    
+                    # Add forecast dates
+                    if 'week' in time_col.lower():
+                        max_time = 52
+                    else:
+                        max_time = 12
+                    
+                    for i in range(1, num_forecast + 1):
+                        forecast_time = last_time + i
+                        forecast_year = last_year
+                        while forecast_time > max_time:
+                            forecast_time -= max_time
+                            forecast_year += 1
+                        date_labels.append(f"{forecast_year}/{forecast_time}")
+                
                 fig = viz.plot_forecast(
                     results['full_data'],
                     full_fitted,
                     future_forecast,
-                    title=f"Future Forecast using {best_name}"
+                    title=f"Future Forecast using {best_name}",
+                    date_labels=date_labels
                 )
                 st.plotly_chart(fig, use_container_width=True)
                 
                 # Download
-                if st.button("📥 Download Results", type="primary"):
-                    output = io.BytesIO()
+                output = io.BytesIO()
+                
+                # Create period-to-date mapping from df_processed
+                df_processed = settings.get('df_processed')
+                year_col = settings.get('year_col')
+                time_col = settings.get('time_col')
+                
+                period_to_date = {}
+                if df_processed is not None and year_col and time_col:
+                    # Get unique Period -> Year, Week/Month mapping
+                    unique_periods = df_processed[['Period', year_col, time_col]].drop_duplicates().sort_values('Period')
+                    for _, row in unique_periods.iterrows():
+                        period_to_date[int(row['Period'])] = {
+                            'Year': int(row[year_col]),
+                            'Time': int(row[time_col])
+                        }
+                
+                # Create combined actual + forecast dataframe
+                num_actual = len(results['full_data'])
+                num_forecast = settings['forecast_periods']
+                total_periods = num_actual + num_forecast
+                
+                # Combine actual and forecast into single Quantity column
+                quantities = list(results['full_data']) + list(future_forecast)
+                
+                # Get last actual date for forecast extrapolation
+                last_year = None
+                last_time = None
+                if period_to_date:
+                    last_period = max(period_to_date.keys())
+                    last_year = period_to_date[last_period]['Year']
+                    last_time = period_to_date[last_period]['Time']
+                
+                all_data = []
+                
+                for i in range(total_periods):
+                    row_data = {}
+                    period = i + 1
+                    qty = quantities[i]
                     
-                    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-                        perf_df.to_excel(writer, sheet_name='Performance', index=False)
+                    # Create Date column (Year/Week or Year/Month format)
+                    if period in period_to_date:
+                        # Actual period - use mapping
+                        year = period_to_date[period]['Year']
+                        time = period_to_date[period]['Time']
+                        row_data['Date'] = f"{year}/{time}"
+                    elif last_year is not None and last_time is not None:
+                        # Forecast period - extrapolate from last actual
+                        periods_ahead = period - num_actual
+                        forecast_time = last_time + periods_ahead
+                        forecast_year = last_year
                         
-                        # Create combined actual + forecast dataframe
-                        num_actual = len(results['full_data'])
-                        num_forecast = settings['forecast_periods']
-                        periods = list(range(1, num_actual + num_forecast + 1))
+                        # Handle week/month overflow (assuming max 52 weeks or 12 months)
+                        if 'week' in time_col.lower():
+                            max_time = 52
+                        else:
+                            max_time = 12
                         
-                        # Actual values (with NaN for forecast periods)
-                        actual_values = list(results['full_data']) + [np.nan] * num_forecast
+                        while forecast_time > max_time:
+                            forecast_time -= max_time
+                            forecast_year += 1
                         
-                        # Forecast values (with NaN for actual periods)
-                        forecast_values = [np.nan] * num_actual + list(future_forecast)
-                        
-                        forecast_df = pd.DataFrame({
-                            'Period': periods,
-                            'Actual': actual_values,
-                            'Forecast': forecast_values,
-                            'Model': [best_name] * len(periods)
-                        })
-                        forecast_df.to_excel(writer, sheet_name='Forecast', index=False)
+                        row_data['Date'] = f"{forecast_year}/{forecast_time}"
+                    else:
+                        row_data['Date'] = ''
                     
-                    st.download_button(
-                        label='📥 Download Analysis',
-                        data=output.getvalue(),
-                        file_name='forecast_analysis.xlsx',
-                        mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-                    )
+                    # Add quantity
+                    row_data['Quantity'] = qty
+                    
+                    # Add type indicator
+                    row_data['Type'] = 'Actual' if i < num_actual else 'Forecast'
+                    
+                    # Add model name
+                    row_data['Model'] = best_name
+                    
+                    all_data.append(row_data)
+                
+                forecast_df = pd.DataFrame(all_data)
+                
+                # Write to Excel (single sheet)
+                with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+                    forecast_df.to_excel(writer, sheet_name='Forecasts', index=False)
+                
+                st.download_button(
+                    label='📥 Download Forecast Results',
+                    data=output.getvalue(),
+                    file_name='forecast_analysis.xlsx',
+                    mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                    type="primary"
+                )
