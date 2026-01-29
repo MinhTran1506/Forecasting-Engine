@@ -9,7 +9,7 @@ import numpy as np
 
 class Visualizer:
     @staticmethod
-    def plot_forecast(actual, fitted, forecast, title="Forecast", date_labels=None):
+    def plot_forecast(actual, fitted, forecast, title="Forecast"):
         """
         Plot actual, fitted, and forecast values with proper connection
         
@@ -17,19 +17,11 @@ class Visualizer:
             actual: Historical actual values
             fitted: Fitted values (same length as actual)
             forecast: Future forecast values
-            date_labels: Optional list of date labels for x-axis (e.g., ['2024/44', '2024/45', ...])
         """
         fig = go.Figure()
         
-        # Determine x-axis labels
-        if date_labels is not None:
-            # Use provided date labels
-            actual_x = date_labels[:len(actual)]
-        else:
-            # Use numeric periods
-            actual_x = list(range(len(actual)))
-        
         # Actual data
+        actual_x = list(range(len(actual)))
         fig.add_trace(go.Scatter(
             x=actual_x,
             y=actual,
@@ -42,21 +34,14 @@ class Visualizer:
         # Fitted line (if provided)
         if fitted is not None:
             # Fitted line covers the same x-range as actual
-            if date_labels is not None:
-                fitted_x = date_labels[:len(fitted)]
-            else:
-                fitted_x = list(range(len(fitted)))
+            fitted_x = list(range(len(fitted)))
             
             # To connect fitted to forecast, we need to extend the x values
             # The last point of fitted should connect to the first point of forecast
             if forecast is not None:
                 # Add the last actual point to the beginning of forecast x-axis
-                if date_labels is not None:
-                    forecast_start_x = date_labels[len(actual) - 1]
-                    forecast_x = [forecast_start_x] + date_labels[len(actual):]
-                else:
-                    forecast_start_x = len(actual) - 1
-                    forecast_x = [forecast_start_x] + list(range(len(actual), len(actual) + len(forecast)))
+                forecast_start_x = len(actual) - 1
+                forecast_x = [forecast_start_x] + list(range(len(actual), len(actual) + len(forecast)))
                 
                 # Add last fitted value to beginning of forecast for connection
                 forecast_y = [fitted[-1]] + list(forecast)
@@ -91,10 +76,7 @@ class Visualizer:
         else:
             # No fitted line, just forecast
             if forecast is not None:
-                if date_labels is not None:
-                    forecast_x = date_labels[len(actual) - 1:len(actual) + len(forecast) - 1]
-                else:
-                    forecast_x = list(range(len(actual) - 1, len(actual) + len(forecast) - 1))
+                forecast_x = list(range(len(actual) - 1, len(actual) + len(forecast) - 1))
                 fig.add_trace(go.Scatter(
                     x=forecast_x,
                     y=forecast,
@@ -106,7 +88,7 @@ class Visualizer:
         
         fig.update_layout(
             title=title,
-            xaxis_title='Date' if date_labels is not None else 'Period',
+            xaxis_title='Period',
             yaxis_title='Value',
             hovermode='x unified',
             height=500,
