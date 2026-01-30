@@ -22,37 +22,124 @@ def create_period_column(df, year_col, time_col, group_cols=None):
     Create sequential period column from Year + Week/Month
     Example: Year=[2024,2024,2025,2025], Week=[1,2,1,2] -> Period=[1,2,3,4]
     If group_cols provided, creates periods within each group separately
+    Handles both numeric months (1, 2, 3...) and text months (Jan, Feb, Mar...)
     """
-    df_sorted = df.sort_values([year_col, time_col]).copy()
+    df_work = df.copy()
+    
+    # Month name to number mapping for text-based months
+    month_map = {
+        'jan': 1, 'january': 1,
+        'feb': 2, 'february': 2,
+        'mar': 3, 'march': 3,
+        'apr': 4, 'april': 4,
+        'may': 5,
+        'jun': 6, 'june': 6,
+        'jul': 7, 'july': 7,
+        'aug': 8, 'august': 8,
+        'sep': 9, 'sept': 9, 'september': 9,
+        'oct': 10, 'october': 10,
+        'nov': 11, 'november': 11,
+        'dec': 12, 'december': 12
+    }
+    
+    # Convert year column to numeric
+    df_work['_sort_year'] = pd.to_numeric(df_work[year_col], errors='coerce')
+    
+    # Convert time column to numeric - handle both numeric and text-based months
+    df_work['_sort_time'] = pd.to_numeric(df_work[time_col], errors='coerce')
+    
+    # Check if we have NaN values (meaning text-based months)
+    if df_work['_sort_time'].isna().any():
+        # Try to map text month names to numbers
+        df_work['_sort_time'] = df_work[time_col].apply(
+            lambda x: month_map.get(str(x).lower().strip(), pd.to_numeric(x, errors='coerce'))
+            if pd.isna(pd.to_numeric(x, errors='coerce')) else pd.to_numeric(x, errors='coerce')
+        )
     
     if group_cols and len(group_cols) > 0:
-        # Create periods within each group
-        # Sort by groups first, then by year and time
-        df_sorted = df.sort_values(group_cols + [year_col, time_col]).copy()
+        # Sort by groups first, then by year and time (numeric)
+        df_sorted = df_work.sort_values(group_cols + ['_sort_year', '_sort_time']).copy()
         
-        # Create year-time combinations
-        df_sorted['_temp_year_time'] = df_sorted[year_col].astype(str) + '_' + df_sorted[time_col].astype(str)
+        # Create year-time combinations (use zero-padded format for consistent ordering)
+        df_sorted['_temp_year_time'] = (
+            df_sorted['_sort_year'].fillna(0).astype(int).astype(str) + '_' + 
+            df_sorted['_sort_time'].fillna(0).astype(int).astype(str).str.zfill(2)
+        )
         
         # Create sequential periods within each group
         def assign_periods(group):
+            # Get unique year-time combinations in sorted order
             unique_periods = group['_temp_year_time'].unique()
             period_map = {period: idx + 1 for idx, period in enumerate(unique_periods)}
             group['Period'] = group['_temp_year_time'].map(period_map)
             return group
         
         df_sorted = df_sorted.groupby(group_cols, group_keys=False).apply(assign_periods)
-        df_sorted = df_sorted.drop('_temp_year_time', axis=1)
+        df_sorted = df_sorted.drop(['_temp_year_time', '_sort_year', '_sort_time'], axis=1)
     else:
-        # Create global periods
-        df_sorted['_temp_year_time'] = df_sorted[year_col].astype(str) + '_' + df_sorted[time_col].astype(str)
+        # Sort by year and time (numeric)
+        df_sorted = df_work.sort_values(['_sort_year', '_sort_time']).copy()
+        
+        # Create year-time combinations
+        df_sorted['_temp_year_time'] = (
+            df_sorted['_sort_year'].fillna(0).astype(int).astype(str) + '_' + 
+            df_sorted['_sort_time'].fillna(0).astype(int).astype(str).str.zfill(2)
+        )
         
         unique_periods = df_sorted['_temp_year_time'].unique()
         period_map = {period: idx + 1 for idx, period in enumerate(unique_periods)}
         
         df_sorted['Period'] = df_sorted['_temp_year_time'].map(period_map)
-        df_sorted = df_sorted.drop('_temp_year_time', axis=1)
+        df_sorted = df_sorted.drop(['_temp_year_time', '_sort_year', '_sort_time'], axis=1)
     
     return df_sorted
+
+def calculate_date_from_reference(ref_year, ref_time, periods_offset, time_col, is_text_based=False):
+    """
+    Calculate a date given a reference point and an offset (can be positive or negative).
+    Returns formatted date string like "2024/6" or "2024/Jun"
+    """
+    month_names = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 
+                   'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+    
+    if is_text_based or not isinstance(ref_time, int):
+        # Text-based month names
+        month_abbrev = str(ref_time)[:3].capitalize()
+        if month_abbrev in month_names:
+            ref_month_idx = month_names.index(month_abbrev)
+            # Calculate new month index (can go negative or positive)
+            new_month_total = ref_month_idx + periods_offset
+            new_month_idx = new_month_total % 12
+            years_offset = new_month_total // 12
+            new_year = ref_year + years_offset
+            new_month = month_names[new_month_idx]
+            return f"{new_year}/{new_month}"
+        else:
+            return f"{ref_year}/{ref_time}"
+    else:
+        # Numeric time (week/month numbers)
+        # Determine max time based on column name
+        if 'week' in time_col.lower():
+            max_time = 52
+        else:
+            max_time = 12
+        
+        # Calculate new time value
+        new_time_total = ref_time + periods_offset
+        new_year = ref_year
+        
+        # Handle overflow (positive offset)
+        while new_time_total > max_time:
+            new_time_total -= max_time
+            new_year += 1
+        
+        # Handle underflow (negative offset)
+        while new_time_total < 1:
+            new_time_total += max_time
+            new_year -= 1
+        
+        return f"{new_year}/{new_time_total}"
+
 
 def aggregate_forecasts_from_groups(matching_groups, group_results, settings, train_ratio, min_periods):
     """
@@ -842,13 +929,19 @@ def render(df):
                 # Combine actual and forecast into single Quantity column
                 quantities = list(result['full_data']) + list(future_forecast)
                 
-                # Get last actual date for forecast extrapolation
-                last_year = None
-                last_time = None
+                # Get first and last actual dates for extrapolation
+                first_year, first_time, first_period = None, None, None
+                last_year, last_time, last_period = None, None, None
+                is_text_based = False
+                
                 if period_to_date:
+                    first_period = min(period_to_date.keys())
                     last_period = max(period_to_date.keys())
+                    first_year = period_to_date[first_period]['Year']
+                    first_time = period_to_date[first_period]['Time']
                     last_year = period_to_date[last_period]['Year']
                     last_time = period_to_date[last_period]['Time']
+                    is_text_based = not isinstance(first_time, int)
                 
                 # Create data rows
                 for i in range(total_periods):
@@ -862,40 +955,19 @@ def render(df):
                         year = period_to_date[period]['Year']
                         time = period_to_date[period]['Time']
                         row_data['Date'] = f"{year}/{time}"
-                    elif last_year is not None and last_time is not None:
-                        # Forecast period - extrapolate from last actual
-                        periods_ahead = period - num_actual
-                        
-                        # Check if time is numeric or text-based
-                        if isinstance(last_time, int):
-                            forecast_time = last_time + periods_ahead
-                            forecast_year = last_year
-                            
-                            # Handle week/month overflow (assuming max 52 weeks or 12 months)
-                            if 'week' in time_col.lower():
-                                max_time = 52
-                            else:
-                                max_time = 12
-                            
-                            while forecast_time > max_time:
-                                forecast_time -= max_time
-                                forecast_year += 1
-                            
-                            row_data['Date'] = f"{forecast_year}/{forecast_time}"
+                    elif first_year is not None:
+                        if period <= num_actual:
+                            # Missing actual period - extrapolate backward from first known period
+                            periods_offset = period - first_period
+                            row_data['Date'] = calculate_date_from_reference(
+                                first_year, first_time, periods_offset, time_col, is_text_based
+                            )
                         else:
-                            # Text-based month names - use month mapping
-                            month_names = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 
-                                          'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-                            month_abbrev = str(last_time)[:3].capitalize()
-                            if month_abbrev in month_names:
-                                last_month_idx = month_names.index(month_abbrev)
-                                forecast_month_idx = (last_month_idx + periods_ahead) % 12
-                                years_ahead = (last_month_idx + periods_ahead) // 12
-                                forecast_year = last_year + years_ahead
-                                forecast_month = month_names[forecast_month_idx]
-                                row_data['Date'] = f"{forecast_year}/{forecast_month}"
-                            else:
-                                row_data['Date'] = f"{last_year}/{last_time}+{periods_ahead}"
+                            # Forecast period - extrapolate forward from last actual
+                            periods_offset = period - last_period
+                            row_data['Date'] = calculate_date_from_reference(
+                                last_year, last_time, periods_offset, time_col, is_text_based
+                            )
                     else:
                         row_data['Date'] = ''
                     
@@ -1030,12 +1102,19 @@ def render(df):
                 quantities = list(results['full_data']) + list(future_forecast)
                 
                 # Get last actual date for forecast extrapolation
-                last_year = None
-                last_time = None
+                # Get first and last actual dates for extrapolation
+                first_year, first_time, first_period = None, None, None
+                last_year, last_time, last_period = None, None, None
+                is_text_based = False
+                
                 if period_to_date:
+                    first_period = min(period_to_date.keys())
                     last_period = max(period_to_date.keys())
+                    first_year = period_to_date[first_period]['Year']
+                    first_time = period_to_date[first_period]['Time']
                     last_year = period_to_date[last_period]['Year']
                     last_time = period_to_date[last_period]['Time']
+                    is_text_based = not isinstance(first_time, int)
                 
                 all_data = []
                 
@@ -1050,40 +1129,19 @@ def render(df):
                         year = period_to_date[period]['Year']
                         time = period_to_date[period]['Time']
                         row_data['Date'] = f"{year}/{time}"
-                    elif last_year is not None and last_time is not None:
-                        # Forecast period - extrapolate from last actual
-                        periods_ahead = period - num_actual
-                        
-                        # Check if time is numeric or text-based
-                        if isinstance(last_time, int):
-                            forecast_time = last_time + periods_ahead
-                            forecast_year = last_year
-                            
-                            # Handle week/month overflow (assuming max 52 weeks or 12 months)
-                            if 'week' in time_col.lower():
-                                max_time = 52
-                            else:
-                                max_time = 12
-                            
-                            while forecast_time > max_time:
-                                forecast_time -= max_time
-                                forecast_year += 1
-                            
-                            row_data['Date'] = f"{forecast_year}/{forecast_time}"
+                    elif first_year is not None:
+                        if period <= num_actual:
+                            # Missing actual period - extrapolate backward from first known period
+                            periods_offset = period - first_period
+                            row_data['Date'] = calculate_date_from_reference(
+                                first_year, first_time, periods_offset, time_col, is_text_based
+                            )
                         else:
-                            # Text-based month names - use month mapping
-                            month_names = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 
-                                          'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-                            month_abbrev = str(last_time)[:3].capitalize()
-                            if month_abbrev in month_names:
-                                last_month_idx = month_names.index(month_abbrev)
-                                forecast_month_idx = (last_month_idx + periods_ahead) % 12
-                                years_ahead = (last_month_idx + periods_ahead) // 12
-                                forecast_year = last_year + years_ahead
-                                forecast_month = month_names[forecast_month_idx]
-                                row_data['Date'] = f"{forecast_year}/{forecast_month}"
-                            else:
-                                row_data['Date'] = f"{last_year}/{last_time}+{periods_ahead}"
+                            # Forecast period - extrapolate forward from last actual
+                            periods_offset = period - last_period
+                            row_data['Date'] = calculate_date_from_reference(
+                                last_year, last_time, periods_offset, time_col, is_text_based
+                            )
                     else:
                         row_data['Date'] = ''
                     
