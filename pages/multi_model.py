@@ -282,7 +282,7 @@ def render(df):
         forecast_periods = st.number_input(
             "🔮 Forecast Periods",
             min_value=1,
-            max_value=120,
+            max_value=200,
             value=24,
             step=1,
             help="Number of periods to forecast ahead"
