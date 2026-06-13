@@ -90,20 +90,20 @@ else:
         st.sidebar.info(f"📋 Columns: {len(df.columns)}")
     
     # Main tabs
-    tab_titles = ["🏠 Home", "🎯 Best-Fit Forecast", "🔮 Holt-Winters", "🧙‍♂️ Prophet"]
+    tab_titles = ["🎯 Best-Fit Forecast"]  # Commented out: "🏠 Home", "🔮 Holt-Winters", "🧙‍♂️ Prophet"
     tabs = st.tabs(tab_titles)
     
-    with tabs[0]:
-        home.render(df)
+    # with tabs[0]:
+    #     home.render(df)
     
-    with tabs[1]:
+    with tabs[0]:  # Changed from tabs[1]
         multi_model.render(df)
         
-    with tabs[2]:
-        holt_winters.render(df)
+    # with tabs[2]:
+    #     holt_winters.render(df)
     
-    with tabs[3]:
-        auto_future.render(df)
+    # with tabs[3]:
+    #     auto_future.render(df)
     
     # Footer
     st.sidebar.markdown("---")
