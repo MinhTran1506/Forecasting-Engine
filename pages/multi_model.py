@@ -839,12 +839,28 @@ def render(df):
                                     test_predictions          # Test portion = model predictions
                                 ])
                                 
+                                # Build Year/Time labels for this group's timeline
+                                group_dict = {}
+                                for part in group_name.split(', '):
+                                    if '=' in part:
+                                        col, val = part.split('=', 1)
+                                        group_dict[col] = val
+                                x_labels = build_period_labels(
+                                    settings.get('df_processed'),
+                                    settings.get('year_col'),
+                                    settings.get('time_col'),
+                                    len(result['full_data']),
+                                    settings['forecast_periods'],
+                                    group_dict=group_dict
+                                )
+
                                 # Plot with fitted line that connects to forecast
                                 fig = viz.plot_forecast(
                                     result['full_data'],
                                     full_fitted,
                                     future_forecast,
-                                    title=f"Forecast for {group_name}"
+                                    title=f"Forecast for {group_name}",
+                                    x_labels=x_labels
                                 )
                                 st.plotly_chart(fig, use_container_width=True)
                         
