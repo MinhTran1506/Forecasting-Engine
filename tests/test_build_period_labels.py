@@ -41,3 +41,42 @@ def test_forward_extrapolation_weekly_rollover():
     df = pd.DataFrame({"Period": [1, 2], "Year": [2024, 2024], "Week": [51, 52]})
     labels = build_period_labels(df, "Year", "Week", num_actual=2, num_forecast=2)
     assert labels == ["2024/51", "2024/52", "2025/1", "2025/2"]
+
+
+def test_backward_extrapolation_leading_gap():
+    # Mapping starts at period 3 (2024/3); periods 1,2 extrapolate backward.
+    df = _df([3, 4], [2024, 2024], [3, 4])
+    labels = build_period_labels(df, "Year", "Month", num_actual=4, num_forecast=0)
+    assert labels == ["2024/1", "2024/2", "2024/3", "2024/4"]
+
+
+def test_group_filter_returns_only_that_group_timeline():
+    df = pd.DataFrame({
+        "Period": [1, 2, 1, 2],
+        "Year": [2024, 2024, 2024, 2024],
+        "Month": [1, 2, 6, 7],
+        "Product": ["A", "A", "B", "B"],
+    })
+    labels = build_period_labels(
+        df, "Year", "Month", num_actual=2, num_forecast=0,
+        group_dict={"Product": "B"})
+    assert labels == ["2024/6", "2024/7"]
+
+
+def test_returns_none_when_df_missing():
+    assert build_period_labels(None, "Year", "Month", 3, 0) is None
+
+
+def test_returns_none_when_column_missing():
+    df = _df([1, 2], [2024, 2024], [1, 2])
+    assert build_period_labels(df, "Year", "Nonexistent", 2, 0) is None
+
+
+def test_returns_none_when_group_filter_empties_frame():
+    df = pd.DataFrame({
+        "Period": [1], "Year": [2024], "Month": [1], "Product": ["A"],
+    })
+    result = build_period_labels(
+        df, "Year", "Month", num_actual=1, num_forecast=0,
+        group_dict={"Product": "Z"})
+    assert result is None
