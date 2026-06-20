@@ -955,11 +955,19 @@ def render(df):
                                 test_predictions      # Test portion = model predictions
                             ])
                             
+                            x_labels = build_period_labels(
+                                settings.get('df_processed'),
+                                settings.get('year_col'),
+                                settings.get('time_col'),
+                                len(aggregated_y),
+                                len(aggregated_future_forecast)
+                            )
                             fig = viz.plot_forecast(
                                 aggregated_y,
                                 full_fitted,
                                 aggregated_future_forecast,
-                                title=f"Overall Forecast (Sum of {len(matching_groups)} groups)"
+                                title=f"Overall Forecast (Sum of {len(matching_groups)} groups)",
+                                x_labels=x_labels
                             )
                             st.plotly_chart(fig, use_container_width=True)
         else:
@@ -1153,11 +1161,19 @@ def render(df):
             if future_result:
                 future_forecast = np.maximum(future_result['predictions'], 0)
                 
+                x_labels = build_period_labels(
+                    settings.get('df_processed'),
+                    settings.get('year_col'),
+                    settings.get('time_col'),
+                    len(results['full_data']),
+                    settings['forecast_periods']
+                )
                 fig = viz.plot_forecast(
                     results['full_data'],
                     full_fitted,
                     future_forecast,
-                    title=f"Future Forecast using {best_name}"
+                    title=f"Future Forecast using {best_name}",
+                    x_labels=x_labels
                 )
                 st.plotly_chart(fig, use_container_width=True)
                 
