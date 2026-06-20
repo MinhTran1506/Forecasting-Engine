@@ -754,7 +754,7 @@ def render(df):
             
             # Create columns for filters (max 4 per row)
             num_filters = len(available_filters)
-            num_cols = min(4, num_filters)
+            num_cols = max(1, min(4, num_filters))
             col_filters = st.columns(num_cols)
             
             selected_filters = {}
