@@ -9,6 +9,37 @@ import numpy as np
 
 class Visualizer:
     @staticmethod
+    def _thin_ticks(x_labels):
+        """
+        Select a readable subset of x-axis tick positions for the given labels.
+
+        Stride by total count n = len(x_labels):
+          n <= 24 -> stride 1 (all), 25..60 -> stride 3, n > 60 -> stride 6.
+        The last index (n-1) is always included; it is never duplicated if the
+        stride already lands on it.
+
+        Returns (tickvals, ticktext): integer indices into x_labels and the
+        matching label strings.
+        """
+        n = len(x_labels)
+        if n == 0:
+            return [], []
+
+        if n <= 24:
+            stride = 1
+        elif n <= 60:
+            stride = 3
+        else:
+            stride = 6
+
+        tickvals = list(range(0, n, stride))
+        if tickvals[-1] != n - 1:
+            tickvals.append(n - 1)
+
+        ticktext = [x_labels[i] for i in tickvals]
+        return tickvals, ticktext
+
+    @staticmethod
     def plot_forecast(actual, fitted, forecast, title="Forecast", x_labels=None):
         """
         Plot actual, fitted, and forecast values with proper connection
