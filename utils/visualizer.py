@@ -9,7 +9,7 @@ import numpy as np
 
 class Visualizer:
     @staticmethod
-    def plot_forecast(actual, fitted, forecast, title="Forecast"):
+    def plot_forecast(actual, fitted, forecast, title="Forecast", x_labels=None):
         """
         Plot actual, fitted, and forecast values with proper connection
         
@@ -86,9 +86,13 @@ class Visualizer:
                     marker=dict(size=6)
                 ))
         
+        xaxis_title = 'Period'
+        if x_labels:
+            xaxis_title = 'Time'
+
         fig.update_layout(
             title=title,
-            xaxis_title='Period',
+            xaxis_title=xaxis_title,
             yaxis_title='Value',
             hovermode='x unified',
             height=500,
@@ -102,9 +106,17 @@ class Visualizer:
                 x=1
             )
         )
-        
+
+        if x_labels:
+            tickvals = list(range(len(x_labels)))
+            fig.update_xaxes(
+                tickmode='array',
+                tickvals=tickvals,
+                ticktext=list(x_labels)
+            )
+
         return fig
-    
+
     @staticmethod
     def plot_model_comparison(actual, predictions_dict):
         """Plot multiple model predictions"""
