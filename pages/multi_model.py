@@ -997,78 +997,29 @@ def render(df):
                         col, val = part.split('=', 1)
                         group_dict[col] = val
                 
-                # Filter df_processed for this specific group
-                period_to_date = {}
-                if df_processed is not None and year_col and time_col:
-                    group_filter = pd.Series([True] * len(df_processed))
-                    for col, val in group_dict.items():
-                        if col in df_processed.columns:
-                            group_filter = group_filter & (df_processed[col] == val)
-                    
-                    group_df = df_processed[group_filter]
-                    if not group_df.empty:
-                        # Get unique Period -> Year, Week/Month mapping for this group
-                        unique_periods = group_df[['Period', year_col, time_col]].drop_duplicates().sort_values('Period')
-                        for _, row in unique_periods.iterrows():
-                            # Handle both numeric and text time values
-                            time_val = row[time_col]
-                            try:
-                                time_val = int(time_val)
-                            except (ValueError, TypeError):
-                                pass  # Keep as string (e.g., 'Dec', 'Jan')
-                            
-                            period_to_date[int(row['Period'])] = {
-                                'Year': int(row[year_col]),
-                                'Time': time_val
-                            }
-                
                 # Get dimensions
                 num_actual = len(result['full_data'])
                 num_forecast = settings['forecast_periods']
                 total_periods = num_actual + num_forecast
-                
+
                 # Combine actual and forecast into single Quantity column
                 quantities = list(result['full_data']) + list(future_forecast)
-                
-                # Get first and last actual dates for extrapolation
-                first_year, first_time, first_period = None, None, None
-                last_year, last_time, last_period = None, None, None
-                is_text_based = False
-                
-                if period_to_date:
-                    first_period = min(period_to_date.keys())
-                    last_period = max(period_to_date.keys())
-                    first_year = period_to_date[first_period]['Year']
-                    first_time = period_to_date[first_period]['Time']
-                    last_year = period_to_date[last_period]['Year']
-                    last_time = period_to_date[last_period]['Time']
-                    is_text_based = not isinstance(first_time, int)
-                
+
+                # Build Year/Time labels from the shared helper (same source as chart)
+                date_labels = build_period_labels(
+                    df_processed, year_col, time_col,
+                    num_actual, num_forecast, group_dict=group_dict
+                )
+
                 # Create data rows
                 for i in range(total_periods):
                     row_data = {}
                     period = i + 1
                     qty = quantities[i]
-                    
-                    # Create Date column (Year/Week or Year/Month format)
-                    if period in period_to_date:
-                        # Actual period - use mapping
-                        year = period_to_date[period]['Year']
-                        time = period_to_date[period]['Time']
-                        row_data['Date'] = f"{year}/{time}"
-                    elif first_year is not None:
-                        if period <= num_actual:
-                            # Missing actual period - extrapolate backward from first known period
-                            periods_offset = period - first_period
-                            row_data['Date'] = calculate_date_from_reference(
-                                first_year, first_time, periods_offset, time_col, is_text_based
-                            )
-                        else:
-                            # Forecast period - extrapolate forward from last actual
-                            periods_offset = period - last_period
-                            row_data['Date'] = calculate_date_from_reference(
-                                last_year, last_time, periods_offset, time_col, is_text_based
-                            )
+
+                    # Date column (Year/Time) from shared label builder
+                    if date_labels is not None and i < len(date_labels):
+                        row_data['Date'] = date_labels[i]
                     else:
                         row_data['Date'] = ''
                     
@@ -1185,72 +1136,29 @@ def render(df):
                 year_col = settings.get('year_col')
                 time_col = settings.get('time_col')
                 
-                period_to_date = {}
-                if df_processed is not None and year_col and time_col:
-                    # Get unique Period -> Year, Week/Month mapping
-                    unique_periods = df_processed[['Period', year_col, time_col]].drop_duplicates().sort_values('Period')
-                    for _, row in unique_periods.iterrows():
-                        # Handle both numeric and text time values
-                        time_val = row[time_col]
-                        try:
-                            time_val = int(time_val)
-                        except (ValueError, TypeError):
-                            pass  # Keep as string (e.g., 'Dec', 'Jan')
-                        
-                        period_to_date[int(row['Period'])] = {
-                            'Year': int(row[year_col]),
-                            'Time': time_val
-                        }
-                
                 # Create combined actual + forecast dataframe
                 num_actual = len(results['full_data'])
                 num_forecast = settings['forecast_periods']
                 total_periods = num_actual + num_forecast
-                
+
                 # Combine actual and forecast into single Quantity column
                 quantities = list(results['full_data']) + list(future_forecast)
-                
-                # Get last actual date for forecast extrapolation
-                # Get first and last actual dates for extrapolation
-                first_year, first_time, first_period = None, None, None
-                last_year, last_time, last_period = None, None, None
-                is_text_based = False
-                
-                if period_to_date:
-                    first_period = min(period_to_date.keys())
-                    last_period = max(period_to_date.keys())
-                    first_year = period_to_date[first_period]['Year']
-                    first_time = period_to_date[first_period]['Time']
-                    last_year = period_to_date[last_period]['Year']
-                    last_time = period_to_date[last_period]['Time']
-                    is_text_based = not isinstance(first_time, int)
-                
+
+                # Build Year/Time labels from the shared helper (same source as chart)
+                date_labels = build_period_labels(
+                    df_processed, year_col, time_col, num_actual, num_forecast
+                )
+
                 all_data = []
-                
+
                 for i in range(total_periods):
                     row_data = {}
                     period = i + 1
                     qty = quantities[i]
-                    
-                    # Create Date column (Year/Week or Year/Month format)
-                    if period in period_to_date:
-                        # Actual period - use mapping
-                        year = period_to_date[period]['Year']
-                        time = period_to_date[period]['Time']
-                        row_data['Date'] = f"{year}/{time}"
-                    elif first_year is not None:
-                        if period <= num_actual:
-                            # Missing actual period - extrapolate backward from first known period
-                            periods_offset = period - first_period
-                            row_data['Date'] = calculate_date_from_reference(
-                                first_year, first_time, periods_offset, time_col, is_text_based
-                            )
-                        else:
-                            # Forecast period - extrapolate forward from last actual
-                            periods_offset = period - last_period
-                            row_data['Date'] = calculate_date_from_reference(
-                                last_year, last_time, periods_offset, time_col, is_text_based
-                            )
+
+                    # Date column (Year/Time) from shared label builder
+                    if date_labels is not None and i < len(date_labels):
+                        row_data['Date'] = date_labels[i]
                     else:
                         row_data['Date'] = ''
                     
