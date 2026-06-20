@@ -954,7 +954,18 @@ def render(df):
                                 train_data_agg,      # Training portion = actual
                                 test_predictions      # Test portion = model predictions
                             ])
-                            
+
+                            # Headline accuracy for the summed view, recomputed on
+                            # the aggregated test series (captures cross-group
+                            # error cancellation; not a weighted average).
+                            agg_metrics = ForecastMetrics.calculate_all(
+                                test_data_agg, test_predictions
+                            )
+                            m1, m2, m3 = st.columns(3)
+                            m1.metric("Agg MAPE", f"{agg_metrics['MAPE']:.2f}%")
+                            m2.metric("Agg MAE", f"{agg_metrics['MAE']:.2f}")
+                            m3.metric("Agg RMSE", f"{agg_metrics['RMSE']:.2f}")
+
                             x_labels = build_period_labels(
                                 settings.get('df_processed'),
                                 settings.get('year_col'),
