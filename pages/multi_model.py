@@ -141,6 +141,83 @@ def calculate_date_from_reference(ref_year, ref_time, periods_offset, time_col, 
         return f"{new_year}/{new_time_total}"
 
 
+def build_period_labels(df_processed, year_col, time_col,
+                        num_actual, num_forecast, group_dict=None):
+    """
+    Build a positional list of Year/Time labels for the chart x-axis and the
+    download Date column.
+
+    Returns a list of length (num_actual + num_forecast) where index i
+    corresponds to period (i + 1). Periods found in df_processed use the exact
+    "Year/Time" string; periods outside the known range are extrapolated with
+    calculate_date_from_reference (backward for leading-history gaps, forward
+    for forecast periods).
+
+    Returns None when df_processed / year_col / time_col is missing or the
+    filtered frame yields no period mapping, signalling the caller to fall back
+    to integer-period labels.
+    """
+    if df_processed is None or not year_col or not time_col:
+        return None
+    if year_col not in df_processed.columns or time_col not in df_processed.columns:
+        return None
+
+    work = df_processed
+    if group_dict:
+        mask = pd.Series([True] * len(work), index=work.index)
+        for col, val in group_dict.items():
+            if col in work.columns:
+                mask = mask & (work[col] == val)
+        work = work[mask]
+
+    if work.empty:
+        return None
+
+    # Build Period -> {Year, Time} mapping (numeric Time coerced to int,
+    # text Time kept as-is), matching the existing download logic.
+    period_to_date = {}
+    unique_periods = work[["Period", year_col, time_col]].drop_duplicates().sort_values("Period")
+    for _, row in unique_periods.iterrows():
+        time_val = row[time_col]
+        try:
+            time_val = int(time_val)
+        except (ValueError, TypeError):
+            pass
+        period_to_date[int(row["Period"])] = {
+            "Year": int(row[year_col]),
+            "Time": time_val,
+        }
+
+    if not period_to_date:
+        return None
+
+    first_period = min(period_to_date.keys())
+    last_period = max(period_to_date.keys())
+    first_year = period_to_date[first_period]["Year"]
+    first_time = period_to_date[first_period]["Time"]
+    last_year = period_to_date[last_period]["Year"]
+    last_time = period_to_date[last_period]["Time"]
+    is_text_based = not isinstance(first_time, int)
+
+    labels = []
+    total_periods = num_actual + num_forecast
+    for i in range(total_periods):
+        period = i + 1
+        if period in period_to_date:
+            year = period_to_date[period]["Year"]
+            time = period_to_date[period]["Time"]
+            labels.append(f"{year}/{time}")
+        elif period <= num_actual:
+            offset = period - first_period
+            labels.append(calculate_date_from_reference(
+                first_year, first_time, offset, time_col, is_text_based))
+        else:
+            offset = period - last_period
+            labels.append(calculate_date_from_reference(
+                last_year, last_time, offset, time_col, is_text_based))
+    return labels
+
+
 def aggregate_forecasts_from_groups(matching_groups, group_results, settings, train_ratio, min_periods):
     """
     Aggregate forecasts from individual group best-fit models instead of training a new model.
