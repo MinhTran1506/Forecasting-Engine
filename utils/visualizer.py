@@ -139,11 +139,11 @@ class Visualizer:
         )
 
         if x_labels:
-            tickvals = list(range(len(x_labels)))
+            tickvals, ticktext = Visualizer._thin_ticks(x_labels)
             fig.update_xaxes(
                 tickmode='array',
                 tickvals=tickvals,
-                ticktext=list(x_labels)
+                ticktext=ticktext
             )
 
         return fig
