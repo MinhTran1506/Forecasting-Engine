@@ -80,3 +80,25 @@ def test_returns_none_when_group_filter_empties_frame():
         df, "Year", "Month", num_actual=1, num_forecast=0,
         group_dict={"Product": "Z"})
     assert result is None
+
+
+def test_group_filter_with_non_contiguous_index():
+    # Simulates df_processed after negative-value filtering: rows are dropped
+    # without reset_index, leaving an index with gaps. The group filter must
+    # select rows by label (Product == "B") and stay correctly aligned despite
+    # the gapped index.
+    df = pd.DataFrame({
+        "Period": [1, 2, 3, 4],
+        "Year": [2024, 2024, 2024, 2024],
+        "Month": [1, 2, 3, 4],
+        "Product": ["A", "B", "A", "B"],
+    })
+    df = df.drop(index=[0, 2])  # index becomes [1, 3]; Product B rows -> Periods 2 and 4
+    labels = build_period_labels(
+        df, "Year", "Month", num_actual=2, num_forecast=0,
+        group_dict={"Product": "B"})
+    # Product B mapping: {2: 2024/2, 4: 2024/4}, first_period=2.
+    # Period 1 (<= num_actual, not in mapping) -> backward extrapolation
+    #   calculate_date_from_reference(2024, 2, offset=-1, "Month") -> "2024/1".
+    # Period 2 (in mapping) -> "2024/2".
+    assert labels == ["2024/1", "2024/2"]
