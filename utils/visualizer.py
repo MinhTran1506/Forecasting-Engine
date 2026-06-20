@@ -50,16 +50,26 @@ class Visualizer:
             forecast: Future forecast values
         """
         fig = go.Figure()
-        
+
+        # Map x-positions to time labels for hover (falls back to '' out of range)
+        def _hover(xs):
+            if not x_labels:
+                return None, None
+            customdata = [x_labels[i] if 0 <= i < len(x_labels) else '' for i in xs]
+            return customdata, '%{customdata}<br>%{fullData.name}: %{y:,.2f}<extra></extra>'
+
         # Actual data
         actual_x = list(range(len(actual)))
+        actual_cd, actual_ht = _hover(actual_x)
         fig.add_trace(go.Scatter(
             x=actual_x,
             y=actual,
             mode='lines+markers',
             name='Actual',
             line=dict(color='#2E86AB', width=2),
-            marker=dict(size=6)
+            marker=dict(size=6),
+            customdata=actual_cd,
+            hovertemplate=actual_ht
         ))
         
         # Fitted line (if provided)
@@ -76,16 +86,21 @@ class Visualizer:
                 
                 # Add last fitted value to beginning of forecast for connection
                 forecast_y = [fitted[-1]] + list(forecast)
-                
+
+                fitted_cd, fitted_ht = _hover(fitted_x)
+                forecast_cd, forecast_ht = _hover(forecast_x)
+
                 # Draw fitted line
                 fig.add_trace(go.Scatter(
                     x=fitted_x,
                     y=fitted,
                     mode='lines',
                     name='Fitted',
-                    line=dict(color='#A23B72', width=2, dash='dot')
+                    line=dict(color='#A23B72', width=2, dash='dot'),
+                    customdata=fitted_cd,
+                    hovertemplate=fitted_ht
                 ))
-                
+
                 # Draw forecast line (connected to fitted)
                 fig.add_trace(go.Scatter(
                     x=forecast_x,
@@ -93,39 +108,52 @@ class Visualizer:
                     mode='lines+markers',
                     name='Forecast',
                     line=dict(color='#F18F01', width=2, dash='dash'),
-                    marker=dict(size=6)
+                    marker=dict(size=6),
+                    customdata=forecast_cd,
+                    hovertemplate=forecast_ht
                 ))
             else:
                 # Just fitted, no forecast
+                fitted_cd, fitted_ht = _hover(fitted_x)
                 fig.add_trace(go.Scatter(
                     x=fitted_x,
                     y=fitted,
                     mode='lines',
                     name='Fitted',
-                    line=dict(color='#A23B72', width=2, dash='dot')
+                    line=dict(color='#A23B72', width=2, dash='dot'),
+                    customdata=fitted_cd,
+                    hovertemplate=fitted_ht
                 ))
         else:
             # No fitted line, just forecast
             if forecast is not None:
                 forecast_x = list(range(len(actual) - 1, len(actual) + len(forecast) - 1))
+                forecast_cd, forecast_ht = _hover(forecast_x)
                 fig.add_trace(go.Scatter(
                     x=forecast_x,
                     y=forecast,
                     mode='lines+markers',
                     name='Forecast',
                     line=dict(color='#F18F01', width=2, dash='dash'),
-                    marker=dict(size=6)
+                    marker=dict(size=6),
+                    customdata=forecast_cd,
+                    hovertemplate=forecast_ht
                 ))
         
         xaxis_title = 'Period'
         if x_labels:
             xaxis_title = 'Time'
 
+        # With time labels, use closest-point hover so each tooltip shows the
+        # time label (customdata) instead of the numeric x-position header that
+        # 'x unified' would display. Without labels, keep the unified readout.
+        hovermode = 'closest' if x_labels else 'x unified'
+
         fig.update_layout(
             title=title,
             xaxis_title=xaxis_title,
             yaxis_title='Value',
-            hovermode='x unified',
+            hovermode=hovermode,
             height=500,
             template='plotly_white',
             showlegend=True,
